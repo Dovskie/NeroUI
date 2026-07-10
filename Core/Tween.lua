@@ -1,7 +1,7 @@
 local TweenService = game:GetService('TweenService')
 
-local Import = loadstring(game:HttpGet('https://raw.githubusercontent.com/Dovskie/NeroUI/refs/heads/main/init.lua'))()
-local Signal = Import('Core/Tween')
+local Import = ...
+local Signal = Import('Core/Signal')
 
 local Tween = {}
 Tween.__index = Tween
@@ -21,7 +21,7 @@ function Tween.new(instance, props, duration, style, direction)
     self.Playing = false
 
     local tweenInfo = TweenInfo.new(
-        duration or DEFAULT_DIRECTION,
+        duration or DEFAULT_DURATION,
         style or DEFAULT_STYLE,
         direction or DEFAULT_DIRECTION
     )
