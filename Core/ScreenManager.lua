@@ -50,6 +50,17 @@ local function resolveParent()
     error('ScreenManager: ga nemu parent yang valid buat ScreenGui (CoreGui/PlayerGui/gethui gagal semua)')
 end
 
+local function tryProtectGui(gui)
+	local protect = (syn and syn.protect_gui)
+		or protect_gui
+		or protectgui
+		or (getgenv and getgenv().protect_gui)
+
+	if protect then
+		pcall(protect, gui)
+	end
+end
+
 function ScreenManager.GetRoot()
     if _root then return _root end
 
@@ -60,6 +71,8 @@ function ScreenManager.GetRoot()
     gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     gui.DisplayOrder = 999
     gui.Parent = resolveParent()
+
+    tryProtectGui(gui)
 
     _root = gui
     return _root

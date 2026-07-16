@@ -7,7 +7,7 @@ local InputHandler = Import('Core/InputHandler')
 local ThemeEngine = Import('Theme/ThemeEngine')
 local BaseComponent = Import('Components/Base/BaseComponent')
 
-local Button = {}
+local Button = setmetatable({}, { __index = BaseComponent })
 Button.__index = Button
 
 local DEFAULT_SIZE = UDim2.new(0, 140, 0, 36)
@@ -31,7 +31,7 @@ function Button.new(props)
 
     Draw.ApplyCorner(inst, CORNER_RADIUS)
     
-    local self = BaseComponent.new(instance)
+    local self = BaseComponent.new(inst)
     setmetatable(self, Button)
 
     self.OnClick = Signal.new()
