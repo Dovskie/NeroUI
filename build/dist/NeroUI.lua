@@ -2995,7 +2995,7 @@ local Label = Import('Components/Basic/Label')
 
 local Watermark = {}
 
-local CONTAINER_MARGIN = 16
+local CONTAINER_TOP_MARGIN = 10
 local CONTAINER_HEIGHT = 32
 local CONTAINER_PADDING = 12
 local ITEM_GAP = 10
@@ -3049,7 +3049,8 @@ local function ensureContainer()
 
 	local container = Create("Frame", {
 		Name = "NeroWatermark",
-		Position = UDim2.new(0, CONTAINER_MARGIN, 0, CONTAINER_MARGIN),
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, CONTAINER_TOP_MARGIN),
 		Size = UDim2.new(0, 0, 0, CONTAINER_HEIGHT),
 		AutomaticSize = Enum.AutomaticSize.X,
 		BorderSizePixel = 0,
