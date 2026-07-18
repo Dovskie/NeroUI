@@ -48,6 +48,12 @@ local function pulseStatusDot(toTransparent)
 	_statusTween:Play()
 end
 
+local function refreshStatusDot()
+	if _statusDot then
+		_statusDot.Visible = #_tags == 0
+	end
+end
+
 local function ensureContainer()
 	if _container then
 		return
@@ -165,6 +171,7 @@ local function createTagInstance(text, color)
 		TextSize = 11,
 		Font = Enum.Font.GothamBold,
 		TextColor3 = Color3.fromRGB(255, 255, 255),
+		TextYAlignment = Enum.TextYAlignment.Center,
 		Parent = tag,
 	})
 
@@ -214,6 +221,7 @@ function Watermark.AddTag(text, color)
 	local instance = createTagInstance(text, color)
 	table.insert(_tags, { Text = text, Color = color, Instance = instance })
 	refreshSeparator()
+	refreshStatusDot()
 end
 
 function Watermark.ClearTags()
@@ -222,6 +230,7 @@ function Watermark.ClearTags()
 	end
 	table.clear(_tags)
 	refreshSeparator()
+	refreshStatusDot()
 end
 
 function Watermark.Hide()
