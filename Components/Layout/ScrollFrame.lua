@@ -24,6 +24,13 @@ function ScrollFrame.new(props)
 		Parent = props.Parent,
 	})
 
+    Draw.ApplyPadding(instance, {
+        top = 12,
+        bottom = 12,
+        left = 12,
+        right = 12 + SCROLLBAR_THICKNESS + 4,
+    })
+
 	local listLayout = Draw.ListLayout(CONTENT_GAP, "Vertical")
 	listLayout.Parent = instance
 
