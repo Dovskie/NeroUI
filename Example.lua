@@ -5,16 +5,14 @@
 -- ============================================================
 -- 1. LOAD NeroUI -- cukup 1 baris, BASE_URL udah nempel di init.lua sendiri
 -- ============================================================
-local NeroUI = loadstring(game:HttpGet(
-	"https://raw.githubusercontent.com/Dovskie/NeroUI/main/init.lua"
-))()
+local NeroUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Dovskie/NeroUI/main/init.lua"))()
 
 -- ============================================================
 -- 2. BIKIN WINDOW -- tema, accent color bisa langsung di-set dari awal
 -- ============================================================
 local window = NeroUI.new({
 	Title = "NeroUI Hub",
-	Theme = "Light", -- atau "Light"
+	Theme = "Dark", -- atau "Light"
 	Accent = Color3.fromHex("#6C5CE7"),
 })
 

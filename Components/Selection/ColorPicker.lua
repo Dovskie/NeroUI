@@ -1,4 +1,5 @@
 local UserInputService = game:GetService("UserInputService")
+local GuiService = game:GetService("GuiService")
 
 local Import = ...
 local Create = Import("Core/Create")
@@ -214,7 +215,7 @@ end
 function ColorPicker:_setupDragging(svSquare, hueSlider)
 	local svInput = InputHandler.new(svSquare)
 	svInput.PressStart:Connect(function(input)
-		local dragging = true
+		self._svDragging = true
 
 		local function updateFromInput(pos)
 			local abs = svSquare.AbsolutePosition
@@ -230,28 +231,28 @@ function ColorPicker:_setupDragging(svSquare, hueSlider)
 
 		updateFromInput(input.Position)
 
-		local moveConn, endConn
-		moveConn = UserInputService.InputChanged:Connect(function(moveInput)
-			if not dragging then return end
+		self._svMoveConn = UserInputService.InputChanged:Connect(function(moveInput)
+			if not self._svDragging then return end
 			if moveInput.UserInputType ~= Enum.UserInputType.MouseMovement
 				and moveInput.UserInputType ~= Enum.UserInputType.Touch then
 				return
 			end
 			updateFromInput(moveInput.Position)
 		end)
-		endConn = UserInputService.InputEnded:Connect(function(endInput)
+		
+		self._svEndConn = UserInputService.InputEnded:Connect(function(endInput)
 			if not isPointerInput(endInput.UserInputType) then return end
-			if not dragging then return end
-			dragging = false
-			moveConn:Disconnect()
-			endConn:Disconnect()
+			if not self._svDragging then return end
+			self._svDragging = false
+			self._svMoveConn:Disconnect()
+			self._svEndConn:Disconnect()
 		end)
 	end)
 	self._svInput = svInput
 
 	local hueInput = InputHandler.new(hueSlider)
 	hueInput.PressStart:Connect(function(input)
-		local dragging = true
+		self._hueDragging = true
 
 		local function updateFromInput(pos)
 			local abs = hueSlider.AbsolutePosition
@@ -265,21 +266,20 @@ function ColorPicker:_setupDragging(svSquare, hueSlider)
 
 		updateFromInput(input.Position)
 
-		local moveConn, endConn
-		moveConn = UserInputService.InputChanged:Connect(function(moveInput)
-			if not dragging then return end
+		self._hueMoveConn = UserInputService.InputChanged:Connect(function(moveInput)
+			if not self._hueDragging then return end
 			if moveInput.UserInputType ~= Enum.UserInputType.MouseMovement
 				and moveInput.UserInputType ~= Enum.UserInputType.Touch then
 				return
 			end
 			updateFromInput(moveInput.Position)
 		end)
-		endConn = UserInputService.InputEnded:Connect(function(endInput)
+		self._hueEndConn = UserInputService.InputEnded:Connect(function(endInput)
 			if not isPointerInput(endInput.UserInputType) then return end
-			if not dragging then return end
-			dragging = false
-			moveConn:Disconnect()
-			endConn:Disconnect()
+			if not self._hueDragging then return end
+			self._hueDragging = false
+			self._hueMoveConn:Disconnect()
+			self._hueEndConn:Disconnect()
 		end)
 	end)
 	self._hueInput = hueInput
@@ -316,7 +316,7 @@ function ColorPicker:Open()
 
 		task.defer(function()
 			if not self._open then return end
-			local mouse = UserInputService:GetMouseLocation()
+			local mouse = UserInputService:GetMouseLocation() - GuiService:GetGuiInset()
 			if not self:_isPointInside(self._swatch, mouse) and not self:_isPointInside(self._popup, mouse) then
 				self:Close()
 			end
@@ -325,19 +325,23 @@ function ColorPicker:Open()
 end
 
 function ColorPicker:Close()
-	if not self._open then
-		return
-	end
+    if not self._open then return end
 
-	self._open = false
-	if self._popup then
-		self._popup.Visible = false
-	end
+    self._open = false
 
-	if self._outsideClickConnection then
-		self._outsideClickConnection:Disconnect()
-		self._outsideClickConnection = nil
-	end
+    if self._popup then self._popup.Visible = false end
+
+    if self._outsideClickConnection then
+        self._outsideClickConnection:Disconnect()
+        self._outsideClickConnection = nil
+    end
+
+	self._svDragging = false
+    self._hueDragging = false
+    if self._svMoveConn then self._svMoveConn:Disconnect() self._svMoveConn = nil end
+    if self._svEndConn then self._svEndConn:Disconnect() self._svEndConn = nil end
+    if self._hueMoveConn then self._hueMoveConn:Disconnect() self._hueMoveConn = nil end
+    if self._hueEndConn then self._hueEndConn:Disconnect() self._hueEndConn = nil end
 end
 
 function ColorPicker:Toggle()
