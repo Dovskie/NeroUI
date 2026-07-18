@@ -64,8 +64,6 @@ function Notification.Show(props)
         Parent = container,
     })
     Draw.ApplyCorner(card, 8)
-    Draw.ApplyPadding(card, {top = CARD_PADDING, bottom = CARD_PADDING, left = CARD_PADDING + ACCENT_BAR_WIDTH + 6, right = CARD_PADDING})
-    Draw.ApplyListLayout(card, 2, 'Vertical')
 
     local self = BaseComponent.new(card)
     setmetatable(self, Notification)
@@ -84,11 +82,21 @@ function Notification.Show(props)
         accentBar.BackgroundColor3 = accentColor or theme.Accent
     end)
 
+    local content = Create('Frame', {
+        Name = 'Content',
+        Size = UDim2.new(1, 0, 0, 0),
+        AutomaticSize = Enum.AutomaticSize.Y,
+        BackgroundTransparency = 1,
+        Parent = card,
+    })
+    Draw.ApplyPadding(content, {top = CARD_PADDING, bottom = CARD_PADDING, left = CARD_PADDING + ACCENT_BAR_WIDTH + 6, right = CARD_PADDING})
+    Draw.ApplyListLayout(content, 2, 'Vertical')
+
     self._title = Label.new({
         Text = props.Title or 'Notification', 
         Bold = true,
         Size = UDim2.new(1, 0, 0, 18),
-        Parent = card,
+        Parent = content,
     })
     self:AddChild(self._title)
 
@@ -98,7 +106,7 @@ function Notification.Show(props)
             Size = UDim2.new(1, 0, 0, 0),
             Variant = 'Dim',
             TextSize = 13,
-            Parent = card
+            Parent = content
         })
         self._message.Instance.TextWrapped = true
         self._message.Instance.AutomaticSize = Enum.AutomaticSize.Y

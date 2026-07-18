@@ -1,4 +1,5 @@
 import os
+import subprocess
 
 SRC_DIR = "src"
 ENTRY_FILE = "init.lua"
@@ -58,6 +59,33 @@ def strip_entry_bootstrap(entry_source):
     return entry_source[idx:]
 
 
+def git_push():
+    try:
+        status = subprocess.run(
+            ["git", "status", "--porcelain", OUT_FILE],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        if not status.stdout.strip():
+            print("Info: Tidak ada perubahan di NeroUI.lua. Skip git push.")
+            return
+
+        print("Mengidentifikasi perubahan, memulai proses auto-push...")
+
+        subprocess.run(["git", "add", '.'], check=True)
+
+        subprocess.run(["git", "commit", "-m", "update NeroUI.lua"], check=True)
+        subprocess.run(["git", "push"], check=True)
+        
+        print("Sukses push bundle terbaru ke repository!")
+
+    except subprocess.CalledProcessError as e:
+        print(f"Gagal menjalankan perintah Git: {e}")
+    except FileNotFoundError:
+        print("Gagal: Perintah 'git' tidak ditemukan. Pastikan Git sudah terinstall dan masuk PATH.")
+
+
 def main():
     if not os.path.isdir(SRC_DIR):
         raise SystemExit(f"Folder '{SRC_DIR}' nggak ketemu. Jalanin script ini dari root folder build/.")
@@ -80,6 +108,8 @@ def main():
         f.write("\n".join(output))
 
     print(f"OK -> {OUT_FILE} ({len(modules)} modules digabung jadi 1 file)")
+    
+    git_push()
 
 
 if __name__ == "__main__":
