@@ -3,6 +3,7 @@ local Create = Import('Core/Create')
 local Draw = Import('Core/Draw')
 local Tween = Import('Core/Tween')
 local InputHandler = Import('Core/InputHandler')
+local WidgetDrag = Import('Extras/WidgetDrag')
 local ScreenManager = Import('Core/ScreenManager')
 local ThemeEngine = Import('Theme/ThemeEngine')
 local Label = Import('Components/Basic/Label')
@@ -29,6 +30,8 @@ local _separator = nil
 local _tagRow = nil
 local _tags = {}
 local _input = nil
+local _dragHandle = nil
+local _onClick = nil
 local _themeConnection = nil
 
 local function refreshSeparator()
@@ -87,7 +90,15 @@ local function ensureContainer()
 	ScreenManager.BringToFront(container)
 
 	_input = InputHandler.new(container)
-	_input:EnableDrag()
+
+	_dragHandle = WidgetDrag.Enable(container, {
+		SnapToEdge = false,
+		OnClick = function()
+			if _onClick then
+				_onClick()
+			end
+		end,
+	})
 
 	_input.HoverStart:Connect(function()
 		Tween.Quick(_stroke, { Color = ThemeEngine.Current.Accent }, 0.15)
@@ -244,10 +255,18 @@ function Watermark.Toggle()
 	end
 end
 
+function Watermark.SetOnClick(callback)
+	_onClick = callback
+end
+
 function Watermark.Destroy()
 	if _statusTween then
 		_statusTween:Destroy()
 		_statusTween = nil
+	end
+	if _dragHandle then
+		_dragHandle:Destroy()
+		_dragHandle = nil
 	end
 	if _input then
 		_input:Destroy()
@@ -262,6 +281,7 @@ function Watermark.Destroy()
 		_container:Destroy()
 		_container = nil
 	end
+	_onClick = nil
 	_statusDot = nil
 	_titleLabel = nil
 	_descLabel = nil

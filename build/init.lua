@@ -44,7 +44,6 @@ local Icons = Import("Assets/Icons")
 local Watermark = Import("Extras/Watermark")
 local ConfigManager = Import("Extras/ConfigManager")
 local KeybindManager = Import("Extras/KeybindManager")
-local WidgetDrag = Import("Extras/WidgetDrag")
 
 local NeroUI = {}
 
@@ -99,7 +98,6 @@ Window.__index = Window
 local WINDOW_DEFAULT_SIZE = UDim2.new(0, 550, 0, 400)
 local SIDEBAR_WIDTH = 140
 local TITLEBAR_HEIGHT = 36
-local MIN_BUTTON_SIZE = UDim2.new(0, 44, 0, 44)
 
 local function createTabButton(sidebar, text)
 	local instance = Create("TextButton", {
@@ -362,15 +360,15 @@ end
 
 function Window:Show()
 	self._root.Visible = true
-	if self._minimizedHandle then
-		self._minimizedHandle.Instance.Visible = false
-	end
+	Watermark.Hide()
 end
 
 function Window:Hide()
 	self._root.Visible = false
-	self:_ensureMinimizedButton()
-	self._minimizedHandle.Instance.Visible = true
+	Watermark.SetOnClick(function()
+		self:Show()
+	end)
+	Watermark.Show()
 end
 
 function Window:Toggle()
@@ -384,44 +382,6 @@ end
 function Window:Close()
 	self:Destroy()
 	Watermark.Destroy()
-end
-
-function Window:_ensureMinimizedButton()
-	if self._minimizedHandle then
-		return
-	end
-
-	local instance = Create("TextButton", {
-		Name = "NeroMinimized",
-		Size = MIN_BUTTON_SIZE,
-		Position = UDim2.new(0, 16, 0, 16),
-		AutoButtonColor = false,
-		Text = ((self._titleLabel and self._titleLabel.Instance.Text) or "N"):sub(1, 1):upper(),
-		TextSize = 18,
-		Font = Enum.Font.GothamBold,
-		TextColor3 = Color3.fromRGB(255, 255, 255),
-		BorderSizePixel = 0,
-		Visible = false,
-	})
-	Draw.ApplyCorner(instance, MIN_BUTTON_SIZE.Y.Offset / 2)
-	ScreenManager.Register(instance)
-
-	local themeConnection = ThemeEngine.Changed:Connect(function()
-		instance.BackgroundColor3 = ThemeEngine.Current.Accent
-	end)
-	instance.BackgroundColor3 = ThemeEngine.Current.Accent
-
-	local dragHandle = WidgetDrag.Enable(instance, {
-		OnClick = function()
-			self:Show()
-		end,
-	})
-
-	self._minimizedHandle = {
-		Instance = instance,
-		ThemeConnection = themeConnection,
-		DragHandle = dragHandle,
-	}
 end
 
 function Window:Destroy()
@@ -449,13 +409,6 @@ function Window:Destroy()
 		handle.Destroy()
 	end
 	table.clear(self._tabButtonHandles)
-
-	if self._minimizedHandle then
-		self._minimizedHandle.DragHandle:Destroy()
-		self._minimizedHandle.ThemeConnection:Disconnect()
-		self._minimizedHandle.Instance:Destroy()
-		self._minimizedHandle = nil
-	end
 
 	ScreenManager.Unregister(self._root)
 	self._root:Destroy()
