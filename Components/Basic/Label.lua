@@ -14,6 +14,7 @@ function Label.new(props)
     local inst = Create('TextLabel', {
         Name = 'NeroLabel',
         Size = props.Size or DEFAULT_SIZE,
+        Position = props.Position,
         BackgroundTransparency = 1,
         Text = props.Text or '',
         TextSize = props.TextSize or 14,
