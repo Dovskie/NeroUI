@@ -75,11 +75,12 @@ end
 
 function Draw.ListLayout(gap, direction)
     local isHorizontal = direction == 'Horizontal'
-    
+
     return Create('UIListLayout', {
         Padding = UDim.new(0, gap or 8),
         FillDirection = isHorizontal and Enum.FillDirection.Horizontal or Enum.FillDirection.Vertical,
-        SortOrder = Enum.SortOrder.LayoutOrder
+        VerticalAlignment = isHorizontal and Enum.VerticalAlignment.Center or Enum.VerticalAlignment.Top,
+        SortOrder = Enum.SortOrder.LayoutOrder,
     })
 end
 
