@@ -74,9 +74,11 @@ function Draw.ApplyGradient(inst, clrs, rotation)
 end
 
 function Draw.ListLayout(gap, direction)
+    local isHorizontal = direction == 'Horizontal'
+    
     return Create('UIListLayout', {
         Padding = UDim.new(0, gap or 8),
-        FillDirection = direction == 'Horizontal' and Enum.FillDirection.Horizontal or Enum.FillDirection.Vertical,
+        FillDirection = isHorizontal and Enum.FillDirection.Horizontal or Enum.FillDirection.Vertical,
         SortOrder = Enum.SortOrder.LayoutOrder
     })
 end

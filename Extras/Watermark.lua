@@ -171,7 +171,6 @@ local function createTagInstance(text, color)
 		TextSize = 11,
 		Font = Enum.Font.GothamBold,
 		TextColor3 = Color3.fromRGB(255, 255, 255),
-		TextYAlignment = Enum.TextYAlignment.Center,
 		Parent = tag,
 	})
 
