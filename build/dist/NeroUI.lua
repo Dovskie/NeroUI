@@ -3017,6 +3017,7 @@ local _tags = {}
 local _input = nil
 local _dragHandle = nil
 local _onClick = nil
+local _enabled = true
 local _themeConnection = nil
 
 local function refreshSeparator()
@@ -3054,6 +3055,7 @@ local function ensureContainer()
 		Size = UDim2.new(0, 0, 0, CONTAINER_HEIGHT),
 		AutomaticSize = Enum.AutomaticSize.X,
 		BorderSizePixel = 0,
+		Visible = false,
 		Parent = ScreenManager.GetRoot(),
 	})
 	Draw.ApplyCorner(container, CONTAINER_HEIGHT / 2)
@@ -3174,9 +3176,11 @@ local function createTagInstance(text, color)
 	return tag
 end
 
-function Watermark.Show(props)
+function Watermark.Configure(props)
 	props = props or {}
 	ensureContainer()
+
+	_enabled = props.Enabled ~= false
 
 	if props.Title then
 		Watermark.SetTitle(props.Title)
@@ -3190,8 +3194,19 @@ function Watermark.Show(props)
 			Watermark.AddTag(tagProps.Text, tagProps.Color)
 		end
 	end
+end
 
-	_container.Visible = true
+function Watermark:SetMinimized(isMinimized)
+	local shouldShow = isMinimized and _enabled
+
+	if not _container then
+		if not shouldShow then
+			return
+		end
+		ensureContainer()
+	end
+
+	_container.Visible = shouldShow
 end
 
 function Watermark.SetTitle(text)
@@ -3229,7 +3244,7 @@ function Watermark.ClearTags()
 	refreshStatusDot()
 end
 
-function Watermark.Hide()
+function Watermark:Hide()
 	if _container then
 		_container.Visible = false
 	end
@@ -3268,6 +3283,7 @@ function Watermark.Destroy()
 		_container = nil
 	end
 	_onClick = nil
+	_enabled = true
 	_statusDot = nil
 	_titleLabel = nil
 	_descLabel = nil
@@ -3879,7 +3895,7 @@ end
 
 function Window:Show()
 	self._root.Visible = true
-	Watermark:Hide()
+	Watermark:SetMinimized(false)
 end
 
 function Window:Hide()
@@ -3887,7 +3903,7 @@ function Window:Hide()
 	Watermark.SetOnClick(function()
 		self:Show()
 	end)
-	Watermark:Show()
+	Watermark:SetMinimized(true)
 end
 
 function Window:Toggle()

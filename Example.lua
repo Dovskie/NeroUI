@@ -3,23 +3,24 @@
 	Contoh pemakaian NeroUI dari nol sampai fitur-fitur lanjutannya.
 ]]
 
-local NeroUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Dovskie/NeroUI/main/init.lua"))()
+local NeroUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Dovskie/NeroUI/refs/heads/main/build/dist/NeroUI.lua"))()
 
 -- Window: Theme & Accent opsional, langsung keset dari sini
+-- Watermark: konten (Title/Desc/Tags) di-set di sini, tapi TIDAK langsung muncul.
+-- Dia baru muncul otomatis saat window di-minimize, dan hilang lagi saat dibuka.
 local window = NeroUI.new({
 	Title = "NeroUI Hub",
 	Icon = "shield",
 	Theme = "Dark",
 	Accent = Color3.fromHex("#6C5CE7"),
-	Minimize = true,
-})
-
--- Watermark: widget draggable yang nampilin Title/Desc + badge tag
-NeroUI.Watermark.Show({
-	Title = "NeroUI Hub",
-	Desc = "made by Dovskie",
-	Tags = {
-		{ Text = "BETA", Color = Color3.fromRGB(230, 180, 60) },
+	Minimize = true, -- default true, kalo false berarti ga ada tombol minimize di titlebar
+	Watermark = {
+		Enabled = true, -- set false kalo mau matiin watermark sepenuhnya
+		Title = "NeroUI Hub",
+		Desc = "made by Dovskie",
+		Tags = {
+			{ Text = "BETA", Color = Color3.fromRGB(230, 180, 60) },
+		},
 	},
 })
 

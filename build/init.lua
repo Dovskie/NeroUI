@@ -363,7 +363,7 @@ end
 
 function Window:Show()
 	self._root.Visible = true
-	Watermark:Hide()
+	Watermark:SetMinimized(false)
 end
 
 function Window:Hide()
@@ -371,7 +371,7 @@ function Window:Hide()
 	Watermark.SetOnClick(function()
 		self:Show()
 	end)
-	Watermark:Show()
+	Watermark:SetMinimized(true)
 end
 
 function Window:Toggle()
