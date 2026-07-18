@@ -5,6 +5,9 @@
 
 local NeroUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Dovskie/NeroUI/refs/heads/main/build/dist/NeroUI.lua"))()
 
+-- Window: Theme & Accent opsional, langsung keset dari sini
+-- Watermark: konten (Title/Desc/Tags) di-set di sini, tapi TIDAK langsung muncul.
+-- Dia baru muncul otomatis saat window di-minimize, dan hilang lagi saat dibuka.
 local window = NeroUI.new({
 	Title = "NeroUI Hub",
 	Icon = "shield",
@@ -22,6 +25,7 @@ local window = NeroUI.new({
 	},
 })
 
+-- Tab "Main": section dulu, baru komponen-komponen di dalamnya
 local mainTab = window:AddTab("Main")
 local aimSection = mainTab:AddSection("Aim Settings")
 
