@@ -36,6 +36,7 @@ function Keybind.new(props)
         Name = 'NeroKeybind',
         Size = UDim2.new(1, 0, 0, CONTAINER_HEIGHT),
         BackgroundTransparency = 1,
+        Parent = props.Parent
     })
     
     local self = BaseComponent.new(inst)
