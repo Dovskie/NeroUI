@@ -8,8 +8,10 @@ local NeroUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Dovski
 -- Window: Theme & Accent opsional, langsung keset dari sini
 local window = NeroUI.new({
 	Title = "NeroUI Hub",
-	Theme = "Dark", -- atau "Light"
+	Icon = "shield",
+	Theme = "Dark",
 	Accent = Color3.fromHex("#6C5CE7"),
+	Minimize = true,
 })
 
 -- Watermark: widget draggable yang nampilin Title/Desc + badge tag

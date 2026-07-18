@@ -4,6 +4,34 @@ local Create = Import("Core/Create")
 local Icons = {}
 
 local _icons = {}
+local _lucide = nil
+local _lucideLoadAttempted = false
+
+local LUCIDE_BUNDLE_URL = "https://github.com/latte-soft/lucide-roblox/releases/latest/download/lucide-roblox.luau"
+
+local function getLucide()
+	if _lucide or _lucideLoadAttempted then
+		return _lucide
+	end
+	_lucideLoadAttempted = true
+
+	local fetchOk, source = pcall(game.HttpGet, game, LUCIDE_BUNDLE_URL)
+	if not fetchOk then
+		warn("Icons.lua: gagal fetch Lucide bundle -> " .. tostring(source))
+		return nil
+	end
+
+	local compileOk, LucideOrErr = pcall(function()
+		return loadstring(source)()
+	end)
+	if not compileOk then
+		warn("Icons.lua: gagal compile Lucide bundle -> " .. tostring(LucideOrErr))
+		return nil
+	end
+
+	_lucide = LucideOrErr
+	return _lucide
+end
 
 function Icons.Register(name, assetId)
 	assert(type(name) == "string" and name ~= "", "Icons.Register butuh name berupa string")
@@ -35,12 +63,26 @@ function Icons.IsRegistered(name)
 	return _icons[name] ~= nil
 end
 
+local function tryAutoRegister(name)
+	local Lucide = getLucide()
+	if not Lucide then return nil end
+
+	local ok, asset = pcall(Lucide.GetAsset, name, 48)
+	if not ok then
+		warn(("Icons.lua: icon Lucide \"%s\" ga ketemu -> %s"):format(name, tostring(asset)))
+		return nil
+	end
+
+	Icons.RegisterSprite(name, asset.Url, asset.ImageRectOffset, asset.ImageRectSize)
+	return _icons[name]
+end
+
 function Icons.CreateImage(name, props)
 	props = props or {}
-	local entry = Icons.Get(name)
+	local entry = Icons.Get(name) or tryAutoRegister(name)
 
 	if not entry then
-		warn(("Icons.CreateImage: icon \"%s\" belum ke-Register, ImageLabel dibikin kosong"):format(name))
+		warn(("Icons.CreateImage: icon \"%s\" ga ketemu, ImageLabel dibikin kosong"):format(name))
 	end
 
 	local merged = {
@@ -58,37 +100,5 @@ function Icons.CreateImage(name, props)
 
 	return Create("ImageLabel", merged)
 end
-
-local CORE_ICONS = { "chevron-down", "search" }
-
-local LUCIDE_BUNDLE_URL = "https://github.com/latte-soft/lucide-roblox/releases/latest/download/lucide-roblox.luau"
-
-local function autoBootstrapLucide()
-	local fetchOk, source = pcall(game.HttpGet, game, LUCIDE_BUNDLE_URL)
-	if not fetchOk then
-		warn("Icons.lua: gagal fetch Lucide bundle, icon bawaan NeroUI (chevron/search) bakal kosong -> " .. tostring(source))
-		return
-	end
-
-	local compileOk, LucideOrErr = pcall(function()
-		return loadstring(source)()
-	end)
-	if not compileOk then
-		warn("Icons.lua: gagal compile Lucide bundle -> " .. tostring(LucideOrErr))
-		return
-	end
-
-	local Lucide = LucideOrErr
-	for _, iconName in CORE_ICONS do
-		local ok, asset = pcall(Lucide.GetAsset, iconName, 48)
-		if ok then
-			Icons.RegisterSprite(iconName, asset.Url, asset.ImageRectOffset, asset.ImageRectSize)
-		else
-			warn("Icons.lua: icon Lucide \"" .. iconName .. "\" ga ketemu -> " .. tostring(asset))
-		end
-	end
-end
-
-autoBootstrapLucide()
 
 return Icons

@@ -39,6 +39,7 @@ local Dropdown = Import("Components/Selection/Dropdown")
 local ColorPicker = Import("Components/Selection/ColorPicker")
 local SearchBar = Import("Components/Search/SearchBar")
 local ButtonComponent = Import("Components/Basic/Button")
+local Icons = Import("Assets/Icons")
 
 local Watermark = Import("Extras/Watermark")
 local ConfigManager = Import("Extras/ConfigManager")
@@ -188,13 +189,35 @@ function NeroUI.new(props)
 	end))
 	titlebar.BackgroundColor3 = ThemeEngine.Current.Surface
 
+	local TITLE_ICON_SIZE = 16
+	local TITLE_LEFT_PADDING = 12
+	local TITLE_ICON_GAP = 8
+
+	local titleOffsetX = TITLE_LEFT_PADDING
+
+	if props.Icon then
+		local titleIcon = Icons.CreateImage(props.Icon, {
+			Name = "TitleIcon",
+			Size = UDim2.new(0, TITLE_ICON_SIZE, 0, TITLE_ICON_SIZE),
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.new(0, TITLE_LEFT_PADDING, 0.5, 0),
+			ImageColor3 = ThemeEngine.Current.Text,
+			Parent = titlebar,
+		})
+		table.insert(self._themeConnections, ThemeEngine.Changed:Connect(function()
+			titleIcon.ImageColor3 = ThemeEngine.Current.Text
+		end))
+		self._titleIcon = titleIcon
+		titleOffsetX = TITLE_LEFT_PADDING + TITLE_ICON_SIZE + TITLE_ICON_GAP
+	end
+
 	self._titleLabel = Label.new({
 		Text = props.Title or "NeroUI",
 		Bold = true,
-		Size = UDim2.new(1, -80, 1, 0),
+		Size = UDim2.new(1, -80 - (titleOffsetX - TITLE_LEFT_PADDING), 1, 0),
 		Parent = titlebar,
 	})
-	self._titleLabel.Instance.Position = UDim2.new(0, 12, 0, 0)
+	self._titleLabel.Instance.Position = UDim2.new(0, titleOffsetX, 0, 0)
 
 	local closeButton = Create("TextButton", {
 		Name = "CloseButton",
@@ -202,23 +225,59 @@ function NeroUI.new(props)
 		AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.new(1, -8, 0.5, 0),
 		BackgroundTransparency = 1,
-		Text = "X",
-		TextSize = 14,
-		Font = Enum.Font.GothamBold,
+		Text = "",
 		Parent = titlebar,
 	})
+	local closeIcon = Icons.CreateImage("x", {
+		Name = "Icon",
+		Size = UDim2.new(0, 14, 0, 14),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0.5, 0, 0.5, 0),
+		ImageColor3 = ThemeEngine.Current.TextDim,
+		Parent = closeButton,
+	})
 	table.insert(self._themeConnections, ThemeEngine.Changed:Connect(function()
-		closeButton.TextColor3 = ThemeEngine.Current.TextDim
+		closeIcon.ImageColor3 = ThemeEngine.Current.TextDim
 	end))
-	closeButton.TextColor3 = ThemeEngine.Current.TextDim
 
 	local closeInput = InputHandler.new(closeButton)
 	closeInput.PressEnd:Connect(function(wasClick)
 		if wasClick then
-			self:Hide()
+			self:Close()
 		end
 	end)
 	self._closeInput = closeInput
+
+	if props.Minimize then
+		local minimizeButton = Create("TextButton", {
+			Name = "MinimizeButton",
+			Size = UDim2.new(0, 28, 0, 24),
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, -8 - 28 - 6, 0.5, 0),
+			BackgroundTransparency = 1,
+			Text = "",
+			Parent = titlebar,
+		})
+		local minimizeIcon = Icons.CreateImage("minus", {
+			Name = "Icon",
+			Size = UDim2.new(0, 14, 0, 14),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(0.5, 0, 0.5, 0),
+			ImageColor3 = ThemeEngine.Current.TextDim,
+			Parent = minimizeButton,
+		})
+		table.insert(self._themeConnections, ThemeEngine.Changed:Connect(function()
+			minimizeIcon.ImageColor3 = ThemeEngine.Current.TextDim
+		end))
+
+		local minimizeInput = InputHandler.new(minimizeButton)
+		minimizeInput.PressEnd:Connect(function(wasClick)
+			if wasClick then
+				self:Hide()
+			end
+		end)
+		self._minimizeInput = minimizeInput
+	end
 
 	local titlebarInput = InputHandler.new(titlebar)
 	titlebarInput:EnableDrag(root)
@@ -322,6 +381,11 @@ function Window:Toggle()
 	end
 end
 
+function Window:Close()
+	self:Destroy()
+	Watermark.Destroy()
+end
+
 function Window:_ensureMinimizedButton()
 	if self._minimizedHandle then
 		return
@@ -366,6 +430,9 @@ function Window:Destroy()
 	end
 	if self._closeInput then
 		self._closeInput:Destroy()
+	end
+	if self._minimizeInput then
+		self._minimizeInput:Destroy()
 	end
 
 	for _, connection in self._themeConnections do
