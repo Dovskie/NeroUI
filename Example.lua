@@ -14,8 +14,9 @@ local window = NeroUI.new({
 	Theme = "Dark",
 	Accent = Color3.fromHex("#6C5CE7"),
 	Minimize = true, -- default true, kalo false berarti ga ada tombol minimize di titlebar
+	Keybind = Enum.KeyCode.RightControl, -- cuma aktif kalo Watermark.Enabled = false, buat buka lagi window yang di-minimize
 	Watermark = {
-		Enabled = true, -- set false kalo mau matiin watermark sepenuhnya
+		Enabled = true, -- set false kalo mau matiin watermark sepenuhnya (pastikan Keybind di atas ke-set!)
 		Title = "NeroUI Hub",
 		Desc = "made by Dovskie",
 		Tags = {
