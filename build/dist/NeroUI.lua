@@ -3668,6 +3668,9 @@ function NeroUI.new(props)
 	if props.Accent then
 		ThemeEngine.SetAccent(props.Accent)
 	end
+	if props.Watermark then
+		Watermark.Configure(props.Watermark)
+	end
 
 	local self = setmetatable({}, Window)
 	self._tabs = {}
@@ -3876,7 +3879,7 @@ end
 
 function Window:Show()
 	self._root.Visible = true
-	Watermark.Hide()
+	Watermark:Hide()
 end
 
 function Window:Hide()
@@ -3884,7 +3887,7 @@ function Window:Hide()
 	Watermark.SetOnClick(function()
 		self:Show()
 	end)
-	Watermark.Show()
+	Watermark:Show()
 end
 
 function Window:Toggle()
