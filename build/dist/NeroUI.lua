@@ -3260,6 +3260,10 @@ function Watermark.SetOnClick(callback)
 	_onClick = callback
 end
 
+function Watermark.IsEnabled()
+	return _enabled
+end
+
 function Watermark.Destroy()
 	if _statusTween then
 		_statusTween:Destroy()
@@ -3571,6 +3575,7 @@ local Dropdown = Import("Components/Selection/Dropdown")
 local ColorPicker = Import("Components/Selection/ColorPicker")
 local SearchBar = Import("Components/Search/SearchBar")
 local ButtonComponent = Import("Components/Basic/Button")
+local Notification = Import("Components/Feedback/Notification")
 local Icons = Import("Assets/Icons")
 
 local Watermark = Import("Extras/Watermark")
@@ -3630,6 +3635,8 @@ Window.__index = Window
 local WINDOW_DEFAULT_SIZE = UDim2.new(0, 550, 0, 400)
 local SIDEBAR_WIDTH = 140
 local TITLEBAR_HEIGHT = 36
+
+local _reopenKeybindCounter = 0
 
 local function createTabButton(sidebar, text)
 	local instance = Create("TextButton", {
@@ -3693,6 +3700,23 @@ function NeroUI.new(props)
 	self._tabButtonHandles = {}
 	self._activeTab = nil
 	self._themeConnections = {}
+	self._reopenKeybind = props.Keybind
+
+	if props.Keybind then
+		_reopenKeybindCounter += 1
+		self._reopenActionName = "__NeroUI_Reopen_" .. _reopenKeybindCounter
+		KeybindManager.Register(self._reopenActionName, {
+			Default = props.Keybind,
+			Mode = "Press",
+			Callback = function()
+				if not Watermark.IsEnabled() then
+					self:Show()
+				end
+			end,
+		})
+	elseif not Watermark.IsEnabled() then
+		warn("NeroUI: Watermark.Enabled di-set false tapi props.Keybind ga di-set -- window bakal ga bisa dibuka lagi kalau di-minimize!")
+	end
 
 	local root = Create("Frame", {
 		Name = "NeroWindow",
@@ -3904,6 +3928,16 @@ function Window:Hide()
 		self:Show()
 	end)
 	Watermark:SetMinimized(true)
+
+	if not Watermark.IsEnabled() then
+		Notification.Show({
+			Title = "Container di-minimize",
+			Message = self._reopenKeybind
+				and ("Tekan tombol %s buat buka lagi."):format(self._reopenKeybind.Name)
+				or "Watermark dimatikan dan belum ada Keybind buat buka lagi.",
+			Type = "Warning",
+		})
+	end
 end
 
 function Window:Toggle()
@@ -3920,6 +3954,9 @@ function Window:Close()
 end
 
 function Window:Destroy()
+	if self._reopenActionName then
+		KeybindManager.Unregister(self._reopenActionName)
+	end
 	if self._titlebarInput then
 		self._titlebarInput:Destroy()
 	end
