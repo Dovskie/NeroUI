@@ -3479,11 +3479,11 @@ Modules["Theme/Tokens"] = function(...)
 local Tokens = {}
 
 Tokens.Dark = {
-    Background = Color3.fromHex("#15161A"),
-    Surface = Color3.fromHex("#1E2027"),
-    Border = Color3.fromHex('#2A2C33'),
-    Text = Color3.fromHex('#E4E5EA'),
-    TextDim = Color3.fromHex('#8A8D98')
+    Background = Color3.fromHex("#0F1115"),
+    Surface = Color3.fromHex("#191C22"),
+    Border = Color3.fromHex('#262B33'),
+    Text = Color3.fromHex('#E8EAED'),
+    TextDim = Color3.fromHex('#8B92A0')
 }
 
 Tokens.Light = {
