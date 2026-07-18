@@ -132,8 +132,6 @@ local function ensureContainer()
 		LayoutOrder = 4,
 		Parent = container,
 	})
-	table.insert(Watermark, _separator)
-	_themeConnection:Connect(function() end)
 
 	_tagRow = Create("Frame", {
 		Name = "TagRow",
