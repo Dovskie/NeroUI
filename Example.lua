@@ -1,24 +1,18 @@
 --[[
 	Example.lua
+	Contoh pemakaian NeroUI dari nol sampai fitur-fitur lanjutannya.
 ]]
 
--- ============================================================
--- 1. LOAD NeroUI -- cukup 1 baris, BASE_URL udah nempel di init.lua sendiri
--- ============================================================
 local NeroUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Dovskie/NeroUI/main/init.lua"))()
 
--- ============================================================
--- 2. BIKIN WINDOW -- tema, accent color bisa langsung di-set dari awal
--- ============================================================
+-- Window: Theme & Accent opsional, langsung keset dari sini
 local window = NeroUI.new({
 	Title = "NeroUI Hub",
 	Theme = "Dark", -- atau "Light"
 	Accent = Color3.fromHex("#6C5CE7"),
 })
 
--- ============================================================
--- 3. WATERMARK -- widget mengambang draggable, Title + Desc + Tag badge
--- ============================================================
+-- Watermark: widget draggable yang nampilin Title/Desc + badge tag
 NeroUI.Watermark.Show({
 	Title = "NeroUI Hub",
 	Desc = "made by Dovskie",
@@ -27,16 +21,16 @@ NeroUI.Watermark.Show({
 	},
 })
 
--- ============================================================
--- 4. TAB "Main" -- contoh AddSection DULU baru AddToggle/AddSlider/dst
--- ============================================================
+-- Tab "Main": section dulu, baru komponen-komponen di dalamnya
 local mainTab = window:AddTab("Main")
-
 local aimSection = mainTab:AddSection("Aim Settings")
 
 local aimToggle = aimSection:AddToggle({
 	Text = "Enable Aim",
 	Default = false,
+	Callback = function(isEnabled)
+		print("Aim enabled:", isEnabled)
+	end,
 })
 
 local sensitivitySlider = aimSection:AddSlider({
@@ -45,6 +39,9 @@ local sensitivitySlider = aimSection:AddSlider({
 	Max = 100,
 	Default = 50,
 	Step = 5,
+	Callback = function(value)
+		print("Sensitivity:", value)
+	end,
 })
 
 local aimKeybind = aimSection:AddKeybind({
@@ -58,12 +55,12 @@ local targetDropdown = aimSection:AddDropdown({
 	Text = "Target Priority",
 	Options = { "Closest", "Lowest HP", "Highest HP" },
 	Default = "Closest",
+	Callback = function(selected)
+		print("Target priority:", selected)
+	end,
 })
 
--- ============================================================
--- 5. TAB "Visual" -- contoh LANGSUNG AddToggle/AddButton dari Tab, TANPA
---    lewat AddSection (dua-duanya valid, sesuai keputusan project)
--- ============================================================
+-- Tab "Visual": komponen bisa langsung ditaruh di tab tanpa section
 local visualTab = window:AddTab("Visual")
 
 visualTab:AddLabel({ Text = "Pengaturan Tampilan", Bold = true })
@@ -77,32 +74,32 @@ local espToggle = visualTab:AddToggle({
 local accentPicker = visualTab:AddColorPicker({
 	Text = "Accent Color",
 	Default = Color3.fromHex("#6C5CE7"),
+	Callback = function(color)
+		window:SetAccent(color)
+	end,
 })
-accentPicker.OnValueChanged:Connect(function(color)
-	window:SetAccent(color)
-end)
 
+-- Button dengan Icon (nama icon dari Lucide, lihat Assets/Icons.lua) + Callback
 local resetButton = visualTab:AddButton({
 	Text = "Reset ke Default",
+	Icon = "rotate-ccw",
+	Callback = function()
+		espToggle:SetValue(true)
+		accentPicker:SetValue(Color3.fromHex("#6C5CE7"))
+	end,
 })
-resetButton.OnClick:Connect(function()
-	espToggle:SetValue(true)
-	accentPicker:SetValue(Color3.fromHex("#6C5CE7"))
-end)
 
--- ============================================================
--- 6. TAB "Config" -- ConfigManager: Register semua komponen yang mau disave
--- ============================================================
+-- Tab "Config": ConfigManager buat save/load semua komponen ter-daftar
 local configTab = window:AddTab("Config")
 
 local searchBar = configTab:AddSearchBar({
 	Placeholder = "Cari pengaturan...",
+	Callback = function(query) -- dipanggil tiap teksnya berubah
+		print("Search query:", query)
+	end,
 })
-searchBar.OnQueryChanged:Connect(function(query)
-	print("Search query:", query)
-end)
 
--- Register komponen yang mau ikut ke-save/load. flagName HARUS unik.
+-- flagName di Register HARUS unik per komponen
 NeroUI.ConfigManager.Register("AimEnabled", aimToggle)
 NeroUI.ConfigManager.Register("Sensitivity", sensitivitySlider)
 NeroUI.ConfigManager.Register("AimKey", aimKeybind)
@@ -110,36 +107,36 @@ NeroUI.ConfigManager.Register("TargetPriority", targetDropdown)
 NeroUI.ConfigManager.Register("ESPEnabled", espToggle)
 NeroUI.ConfigManager.Register("AccentColor", accentPicker)
 
-local saveButton = configTab:AddButton({ Text = "Save Config" })
-saveButton.OnClick:Connect(function()
-	local ok, err = NeroUI.ConfigManager.Save("default")
-	if ok then
-		-- Notification.lua, dari Import() langsung soalnya ga di-expose ke
-		-- root NeroUI (dianggap "opsional", ga semua developer butuh notif)
+local saveButton = configTab:AddButton({
+	Text = "Save Config",
+	Icon = "save",
+	Callback = function()
+		local ok, err = NeroUI.ConfigManager.Save("default")
 		local Notification = NeroUI.Import("Components/Feedback/Notification")
-		Notification.Show({ Title = "Config Tersimpan", Type = "Success" })
-	else
-		local Notification = NeroUI.Import("Components/Feedback/Notification")
-		Notification.Show({ Title = "Gagal Save", Message = err, Type = "Error" })
-	end
-end)
 
-local loadButton = configTab:AddButton({ Text = "Load Config" })
-loadButton.OnClick:Connect(function()
-	NeroUI.ConfigManager.Load("default")
-end)
+		if ok then
+			Notification.Show({ Title = "Config Tersimpan", Type = "Success" })
+		else
+			Notification.Show({ Title = "Gagal Save", Message = err, Type = "Error" })
+		end
+	end,
+})
 
--- ============================================================
--- 7. TOOLTIP -- nempel ke Instance komponen yang udah ada
--- ============================================================
+local loadButton = configTab:AddButton({
+	Text = "Load Config",
+	Icon = "folder-open",
+	Callback = function()
+		NeroUI.ConfigManager.Load("default")
+	end,
+})
+
+-- Tooltip: nempel ke Instance komponen yang udah ada, tinggal Attach
 local Tooltip = NeroUI.Import("Components/Feedback/Tooltip")
 Tooltip.Attach(resetButton.Instance, {
 	Text = "Balikin semua pengaturan Visual ke nilai awal",
 })
 
--- ============================================================
--- 8. KEYBIND MANAGER -- nyambungin aimKeybind (UI) ke aksi runtime beneran
--- ============================================================
+-- KeybindManager: nyambungin Keybind (UI) ke aksi runtime beneran
 NeroUI.KeybindManager.Bind("AimKey", aimKeybind, {
 	Mode = "Hold", -- nembak selama tombolnya ditahan
 	Callback = function(isDown)
@@ -147,15 +144,13 @@ NeroUI.KeybindManager.Bind("AimKey", aimKeybind, {
 	end,
 })
 
--- ============================================================
--- 9. THEME SWITCHING -- contoh toggle Dark/Light dari Toggle biasa
--- ============================================================
+-- Toggle biasa tetep bisa pakai Callback juga, bukan cuma OnValueChanged:Connect
 local themeToggle = mainTab:AddToggle({
 	Text = "Light Mode",
 	Default = false,
+	Callback = function(isLight)
+		window:SetTheme(isLight and "Light" or "Dark")
+	end,
 })
-themeToggle.OnValueChanged:Connect(function(isLight)
-	window:SetTheme(isLight and "Light" or "Dark")
-end)
 
 print("NeroUI Example loaded! Coba klik tombol minimize di titlebar buat test WidgetDrag juga.")

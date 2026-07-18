@@ -40,6 +40,8 @@ function Slider.new(props)
     setmetatable(self, Slider)
     
     self.OnValueChanged = Signal.new()
+	self:BindCallback(self.OnValueChanged, props.Callback)
+	
     self._min = min
     self._max = max
     self._step = props.Step

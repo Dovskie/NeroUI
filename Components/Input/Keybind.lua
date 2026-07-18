@@ -43,6 +43,8 @@ function Keybind.new(props)
     setmetatable(self, Keybind)
 
     self.OnValueChanged = Signal.new()
+    self:BindCallback(self.OnValueChanged, props.Callback)
+    
     self._value = props.Default
     self._listening = false
     self._listenConn = nil

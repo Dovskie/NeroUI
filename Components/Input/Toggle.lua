@@ -32,6 +32,7 @@ function Toggle.new(props)
     setmetatable(self, Toggle)
     
     self.OnValueChanged = Signal.new()
+    self:BindCallback(self.OnValueChanged, props.Callback)
     self._value = props.Default == true
 
     self._label = Label.new({

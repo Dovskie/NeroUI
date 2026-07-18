@@ -50,6 +50,7 @@ function ColorPicker.new(props)
 	setmetatable(self, ColorPicker)
 
 	self.OnValueChanged = Signal.new()
+	self:BindCallback(self.OnValueChanged, props.Callback)
 
 	local defaultColor = props.Default or ThemeEngine.Current.Accent
 	local h, s, v = defaultColor:ToHSV()

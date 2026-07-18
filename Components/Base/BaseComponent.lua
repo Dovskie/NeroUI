@@ -20,6 +20,13 @@ function BaseComponent.new(inst)
     return self
 end
 
+function BaseComponent:BindCallback(signal, callback)
+    if type(callback) ~= 'function' then return end
+    local connection = signal:Connect(callback)
+    table.insert(self._connections, connection)
+    return connection
+end
+
 function BaseComponent:OnThemeChanged(callback)
     assert(typeof(callback) == 'function', 'OnThemeChanged butuh function')
 

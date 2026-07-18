@@ -37,6 +37,8 @@ function Dropdown.new(props)
 	setmetatable(self, Dropdown)
 
 	self.OnValueChanged = Signal.new()
+	self:BindCallback(self.OnValueChanged, props.Callback)
+	
 	self._options = options
 	self._value = (table.find(options, props.Default) and props.Default) or options[1]
 	self._open = false
