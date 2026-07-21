@@ -112,6 +112,8 @@ function Modal.Show(props)
 	local confirmButton = ButtonComponent.new({
 		Text = props.ConfirmText or "Konfirmasi",
 		Size = UDim2.new(0.5, -BUTTON_GAP / 2, 1, 0),
+		Color = props.Danger and DANGER_COLOR or nil,
+		HoverColor = props.Danger and DANGER_COLOR_HOVER or nil,
 		Parent = buttonRow,
 		Callback = function()
 			close()
@@ -120,17 +122,6 @@ function Modal.Show(props)
 			end
 		end,
 	})
-
-	if props.Danger then
-		confirmButton.Instance.BackgroundColor3 = DANGER_COLOR
-		local input = InputHandler.new(confirmButton.Instance)
-		input.HoverStart:Connect(function()
-			Tween.Quick(confirmButton.Instance, { BackgroundColor3 = DANGER_COLOR_HOVER }, 0.15)
-		end)
-		input.HoverEnd:Connect(function()
-			Tween.Quick(confirmButton.Instance, { BackgroundColor3 = DANGER_COLOR }, 0.15)
-		end)
-	end
 
 	if props.DismissOnOutsideClick then
 		local input = InputHandler.new(overlay)

@@ -198,10 +198,16 @@ local COLOR_TWEEN_DURATION = 0.15
 
 function Button.new(props)
     props = props or {}
+
+    local hasCustomColor = props.Color ~= nil
+    local baseColor = props.Color or ThemeEngine.Current.Accent
+    local hoverColor = props.HoverColor or (hasCustomColor and baseColor or ThemeEngine.Current.AccentHover)
+    local pressedColor = props.PressedColor or (hasCustomColor and baseColor or ThemeEngine.Current.AccentPressed)
+
     local inst = Create('TextButton', {
         Name = 'NeroButton',
         Size = props.Size or DEFAULT_SIZE,
-        BackgroundColor3 = ThemeEngine.Current.Accent,
+        BackgroundColor3 = baseColor,
         AutoButtonColor = false,
         Text = '',
         TextColor3 = Color3.fromRGB(255, 255, 255),
@@ -250,12 +256,17 @@ function Button.new(props)
 
     self._textLabel = textLabel
     self._iconImage = iconImage
-    
+
     self.OnClick = Signal.new()
     self:BindCallback(self.OnClick, props.Callback)
-    
+
     self._input = InputHandler.new(inst)
     self._currentTween = nil
+
+    self._hasCustomColor = hasCustomColor
+    self._color = baseColor
+    self._hoverColor = hoverColor
+    self._pressedColor = pressedColor
 
     local function tweenTo(color)
         if self._currentTween then self._currentTween:Cancel() end
@@ -263,36 +274,60 @@ function Button.new(props)
     end
 
     self._input.HoverStart:Connect(function()
-		if not self._input.Pressed then tweenTo(ThemeEngine.Current.AccentHover) end
+		if not self._input.Pressed then tweenTo(self._hoverColor) end
 	end)
 
     self._input.HoverEnd:Connect(function()
-        if not self._input.Pressed then tweenTo(ThemeEngine.Current.Accent) end
+        if not self._input.Pressed then tweenTo(self._color) end
     end)
 
     self._input.PressStart:Connect(function()
-        tweenTo(ThemeEngine.Current.AccentPressed)
+        tweenTo(self._pressedColor)
     end)
 
     self._input.PressEnd:Connect(function(wasClick)
-        tweenTo(self._input.Hovering and ThemeEngine.Current.AccentHover or ThemeEngine.Current.Accent)
+        tweenTo(self._input.Hovering and self._hoverColor or self._color)
         if wasClick then
             self.OnClick:Fire()
         end
     end)
 
     self:OnThemeChanged(function(theme)
+        -- Kalo Color di-set manual (misal Danger), warnanya independen dari tema,
+        -- jadi ga usah di-refresh pas tema ganti.
+        if not self._hasCustomColor then
+            self._color = theme.Accent
+            self._hoverColor = theme.AccentHover
+            self._pressedColor = theme.AccentPressed
+        end
+
         if self._input.Pressed then
-            self.Instance.BackgroundColor3 = theme.AccentPressed
+            self.Instance.BackgroundColor3 = self._pressedColor
         elseif self._input.Hovering then
-            self.Instance.BackgroundColor3 = theme.AccentHover
+            self.Instance.BackgroundColor3 = self._hoverColor
         else
-            self.Instance.BackgroundColor3 = theme.Accent
+            self.Instance.BackgroundColor3 = self._color
         end
         self._textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
     end)
 
     return self
+end
+
+-- Ganti warna base/hover/pressed button setelah dibuat (misal toggle Danger state).
+function Button:SetColors(color, hoverColor, pressedColor)
+    self._hasCustomColor = color ~= nil
+    self._color = color or ThemeEngine.Current.Accent
+    self._hoverColor = hoverColor or (self._hasCustomColor and self._color or ThemeEngine.Current.AccentHover)
+    self._pressedColor = pressedColor or (self._hasCustomColor and self._color or ThemeEngine.Current.AccentPressed)
+
+    if self._input.Pressed then
+        self.Instance.BackgroundColor3 = self._pressedColor
+    elseif self._input.Hovering then
+        self.Instance.BackgroundColor3 = self._hoverColor
+    else
+        self.Instance.BackgroundColor3 = self._color
+    end
 end
 
 function Button:SetText(text)
@@ -992,6 +1027,8 @@ function Modal.Show(props)
 	local confirmButton = ButtonComponent.new({
 		Text = props.ConfirmText or "Konfirmasi",
 		Size = UDim2.new(0.5, -BUTTON_GAP / 2, 1, 0),
+		Color = props.Danger and DANGER_COLOR or nil,
+		HoverColor = props.Danger and DANGER_COLOR_HOVER or nil,
 		Parent = buttonRow,
 		Callback = function()
 			close()
@@ -1000,17 +1037,6 @@ function Modal.Show(props)
 			end
 		end,
 	})
-
-	if props.Danger then
-		confirmButton.Instance.BackgroundColor3 = DANGER_COLOR
-		local input = InputHandler.new(confirmButton.Instance)
-		input.HoverStart:Connect(function()
-			Tween.Quick(confirmButton.Instance, { BackgroundColor3 = DANGER_COLOR_HOVER }, 0.15)
-		end)
-		input.HoverEnd:Connect(function()
-			Tween.Quick(confirmButton.Instance, { BackgroundColor3 = DANGER_COLOR }, 0.15)
-		end)
-	end
 
 	if props.DismissOnOutsideClick then
 		local input = InputHandler.new(overlay)
