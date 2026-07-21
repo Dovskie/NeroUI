@@ -113,18 +113,14 @@ end
 function Dropdown:_getDisplayText()
 	if not self._isMulti then return "  " .. tostring(self._value) end
 
-	if #self._value == 0 then
+	local count = #self._value
+	if count == 0 then
 		return "  " .. self._placeholder
+	elseif count == 1 then
+		return "  " .. self._value[1]
+	else
+		return "  " .. count .. " dipilih"
 	end
-
-	local parts = {}
-	for _, optionText in self._options do
-		if self._selected[optionText] then
-			table.insert(parts, optionText)
-		end
-	end
-
-	return "  " .. table.concat(parts, ", ")
 end
 
 function Dropdown:_isOptionActive(optionText)
