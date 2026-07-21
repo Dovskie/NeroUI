@@ -20,6 +20,7 @@ local OPTION_HEIGHT = 28
 local POPUP_RADIUS = 6
 local POPUP_MAX_HEIGHT = 160
 local CHECK_SIZE = 14
+local ACTIVE_TRANSPARENCY = 0.85
 
 function Dropdown.new(props)
 	props = props or {}
@@ -112,20 +113,47 @@ end
 function Dropdown:_getDisplayText()
 	if not self._isMulti then return "  " .. tostring(self._value) end
 
-	local count = #self._value
-	if count == 0 then
+	if #self._value == 0 then
 		return "  " .. self._placeholder
-	elseif count == 1 then
-		return "  " .. self._value[1]
-	else
-		return "  " .. count .. " dipilih"
 	end
+
+	local parts = {}
+	for _, optionText in self._options do
+		if self._selected[optionText] then
+			table.insert(parts, optionText)
+		end
+	end
+
+	return "  " .. table.concat(parts, ", ")
+end
+
+function Dropdown:_isOptionActive(optionText)
+	if self._isMulti then
+		return self._selected[optionText] == true
+	end
+	return self._value == optionText
 end
 
 function Dropdown:_refreshOptionVisual(optionText)
 	local row = self._optionRows[optionText]
-	if not row or not row.Check then return end
-	row.Check.BackgroundTransparency = self._selected[optionText] and 0 or 1
+	if not row then return end
+
+	local active = self:_isOptionActive(optionText)
+
+	if row.Check then row.Check.BackgroundTransparency = active and 0 or 1 end
+	if row.CheckMark then row.CheckMark.Visible = active end
+
+	if not row.Hovering then
+		row.Button.BackgroundColor3 = ThemeEngine.Current.Accent
+		row.Button.BackgroundTransparency = active and ACTIVE_TRANSPARENCY or 1
+	end
+	row.Button.TextColor3 = active and ThemeEngine.Current.Accent or ThemeEngine.Current.Text
+end
+
+function Dropdown:_refreshAllOptionVisuals()
+	for optionText in self._optionRows do
+		self:_refreshOptionVisual(optionText)
+	end
 end
 
 function Dropdown:_ensurePopup()
@@ -158,6 +186,8 @@ function Dropdown:_ensurePopup()
 		})
 
 		local checkFrame = nil
+		local checkMark = nil
+
 		if self._isMulti then
 			checkFrame = Create("Frame", {
 				Name = "Check",
@@ -170,21 +200,35 @@ function Dropdown:_ensurePopup()
 			})
 			Draw.ApplyCorner(checkFrame, 4)
 
+			checkMark = Icons.CreateImage("check", {
+				Name = "CheckMark",
+				Size = UDim2.new(0, 10, 0, 10),
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.new(0.5, 0, 0.5, 0),
+				ImageColor3 = Color3.fromRGB(255, 255, 255),
+				Visible = self._selected[optionText] == true,
+				Parent = checkFrame,
+			})
+
 			self:OnThemeChanged(function(theme)
 				checkFrame.BorderColor3 = theme.TextDim
 				checkFrame.BackgroundColor3 = ThemeEngine.Current.Accent
 			end)
 		end
 
-		self._optionRows[optionText] = { Button = optionButton, Check = checkFrame }
+		self._optionRows[optionText] = { Button = optionButton, Check = checkFrame, CheckMark = checkMark, Hovering = false }
 
 		local optionInput = InputHandler.new(optionButton)
 		optionInput.HoverStart:Connect(function()
-			optionButton.BackgroundTransparency = 0
+			local row = self._optionRows[optionText]
+			row.Hovering = true
 			optionButton.BackgroundColor3 = ThemeEngine.Current.AccentHover
+			optionButton.BackgroundTransparency = 0
 		end)
 		optionInput.HoverEnd:Connect(function()
-			optionButton.BackgroundTransparency = 1
+			local row = self._optionRows[optionText]
+			row.Hovering = false
+			self:_refreshOptionVisual(optionText)
 		end)
 		optionInput.PressEnd:Connect(function(wasClick)
 			if not wasClick then
@@ -200,8 +244,12 @@ function Dropdown:_ensurePopup()
 		end)
 
 		self:OnThemeChanged(function(theme)
-			optionButton.TextColor3 = theme.Text
+			if not self._optionRows[optionText].Hovering then
+				optionButton.TextColor3 = self:_isOptionActive(optionText) and theme.Accent or theme.Text
+			end
 		end)
+
+		self:_refreshOptionVisual(optionText)
 	end
 
 	self._popup = popup
@@ -301,8 +349,7 @@ function Dropdown:SetValue(value)
 			end
 		end
 
-		for optionText in self._optionRows do self:_refreshOptionVisual(optionText) end
-
+		self:_refreshAllOptionVisuals()
 		self._selectButton.Text = self:_getDisplayText()
 		self.OnValueChanged:Fire(self:GetValue())
 		return
@@ -311,8 +358,11 @@ function Dropdown:SetValue(value)
 	if not table.find(self._options, value) then return end
 	if value == self._value then return end
 
+	local previousValue = self._value
 	self._value = value
 	self._selectButton.Text = self:_getDisplayText()
+	self:_refreshOptionVisual(previousValue)
+	self:_refreshOptionVisual(value)
 	self.OnValueChanged:Fire(self._value)
 end
 
