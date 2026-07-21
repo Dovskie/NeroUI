@@ -89,33 +89,4 @@ function Draw.ApplyListLayout(inst, gap, direction)
     return inst
 end
 
-function Draw.CornerMask(parent, radius, corner, color)
-    assert(typeof(parent) == 'Instance', 'Draw.CornerMask butuh parent berupa Instance')
-    assert(type(corner) == 'string', 'Draw.CornerMask butuh corner berupa string')
-
-    local anchor, position
-    if corner == "TopLeft" then
-        anchor, position = Vector2.new(0, 0), UDim2.new(0, 0, 0, 0)
-    elseif corner == "TopRight" then
-        anchor, position = Vector2.new(1, 0), UDim2.new(1, 0, 0, 0)
-    elseif corner == "BottomLeft" then
-        anchor, position = Vector2.new(0, 1), UDim2.new(0, 0, 1, 0)
-    elseif corner == "BottomRight" then
-        anchor, position = Vector2.new(1, 1), UDim2.new(1, 0, 1, 0)
-    else
-        error('Draw.CornerMask: corner harus salah satu dari "TopLeft", "TopRight", "BottomLeft", "BottomRight"')
-    end
-
-    return Create("Frame", {
-        Name = "CornerMask",
-        Size = UDim2.new(0, radius, 0, radius),
-        AnchorPoint = anchor,
-        Position = position,
-        BackgroundColor3 = color or Color3.fromRGB(0, 0, 0),
-        BorderSizePixel = 0,
-        ZIndex = 5,
-        Parent = parent,
-    })
-end
-
 return Draw
