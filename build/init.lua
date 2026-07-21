@@ -43,6 +43,7 @@ local Notification = Import("Components/Feedback/Notification")
 local TextBox = Import("Components/Input/TextBox")
 local Paragraph = Import("Components/Basic/Paragraph")
 local SaveManager = Import("Components/Extras/SaveManager")
+local ProgressBar = Import("Components/Feedback/ProgressBar")
 local Icons = Import("Assets/Icons")
 
 
@@ -82,6 +83,7 @@ local function attachComponentHelpers(container)
 	container.AddInput = make(TextBox)
 	container.AddParagraph = make(Paragraph)
 	container.AddSaveManager = make(SaveManager)
+	container.AddProgressBar = make(ProgressBar)
 
 	function container:AddSection(props)
 		if type(props) == "string" then

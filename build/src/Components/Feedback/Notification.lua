@@ -14,6 +14,7 @@ local CONTAINER_WIDTH = 280
 local CONTAINER_MARGIN = 16
 local CARD_PADDING = 12
 local CARD_GAP = 8
+local ACTIONS_GAP = 12
 local ACCENT_BAR_WIDTH = 3
 local DEFAULT_DURATION = 4
 local SLIDE_DISTANCE = 40
@@ -68,6 +69,8 @@ function Notification.Show(props)
     local self = BaseComponent.new(card)
     setmetatable(self, Notification)
 
+    self._actionInputs = {}
+
     self:OnThemeChanged(function(theme)
         card.BackgroundColor3 = theme.Surface
     end)
@@ -104,6 +107,7 @@ function Notification.Show(props)
         Text = props.Title or 'Notification', 
         Bold = true,
         Size = UDim2.new(1, 0, 0, 18),
+        LayoutOrder = 1,
         Parent = content,
     })
     self:AddChild(self._title)
@@ -114,11 +118,55 @@ function Notification.Show(props)
             Size = UDim2.new(1, 0, 0, 0),
             Variant = 'Dim',
             TextSize = 13,
+            LayoutOrder = 2,
             Parent = content
         })
         self._message.Instance.TextWrapped = true
         self._message.Instance.AutomaticSize = Enum.AutomaticSize.Y
         self:AddChild(self._message)
+    end
+
+    if props.Actions and #props.Actions > 0 then
+        local actionsRow = Create('Frame', {
+            Name = 'Actions',
+            Size = UDim2.new(1, 0, 0, 20),
+            BackgroundTransparency = 1,
+            LayoutOrder = 3,
+            Parent = content,
+        })
+        Draw.ApplyListLayout(actionsRow, ACTIONS_GAP, 'Horizontal')
+
+        for _, action in props.Actions do
+            local actionButton = Create('TextButton', {
+                Name = 'ActionButton',
+                Size = UDim2.new(0, 0, 1, 0),
+                AutomaticSize = Enum.AutomaticSize.X,
+                BackgroundTransparency = 1,
+                Text = action.Text or 'Action',
+                TextSize = 12,
+                Font = Enum.Font.GothamBold,
+                Parent = actionsRow,
+            })
+
+            self:OnThemeChanged(function(theme)
+                actionButton.TextColor3 = accentColor or theme.Accent
+            end)
+
+            local actionInput = InputHandler.new(actionButton)
+            actionInput.PressEnd:Connect(function(wasClick)
+                if not wasClick then return end
+
+                if action.Callback then
+                    action.Callback()
+                end
+
+                if action.CloseOnClick ~= false then
+                    self:Close()
+                end
+            end)
+
+            table.insert(self._actionInputs, actionInput)
+        end
     end
 
     self._input = InputHandler.new(card)
@@ -163,6 +211,11 @@ function Notification:Destroy()
         self._input:Destroy()
         self._input = nil
     end
+
+    for _, actionInput in self._actionInputs do
+        actionInput:Destroy()
+    end
+    table.clear(self._actionInputs)
 
     BaseComponent.Destroy(self)
 end

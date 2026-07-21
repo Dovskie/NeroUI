@@ -602,6 +602,162 @@ end
 return SaveManager
 end
 
+Modules["Components/Feedback/Modal"] = function(...)
+local Import = ...
+local Create = Import('Core/Create')
+local Draw = Import('Core/Draw')
+local Tween = Import('Core/Tween')
+local InputHandler = Import('Core/InputHandler')
+local ScreenManager = Import('Core/ScreenManager')
+local ThemeEngine = Import('Theme/ThemeEngine')
+local Label = Import('Components/Basic/Label')
+local ButtonComponent = Import('Components/Basic/Button')
+
+local Modal = {}
+
+local CARD_WIDTH = 300
+local CARD_PADDING = 16
+local CARD_RADIUS = 10
+local BUTTON_HEIGHT = 34
+local BUTTON_GAP = 8
+local ANIM_DURATION = 0.15
+local DANGER_COLOR = Color3.fromRGB(224, 90, 90)
+local DANGER_COLOR_HOVER = Color3.fromRGB(235, 110, 110)
+
+function Modal.Show(props)
+	props = props or {}
+
+	local overlay = Create("Frame", {
+		Name = "NeroConfirmOverlay",
+		Size = UDim2.new(1, 0, 1, 0),
+		BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Active = true,
+		Parent = ScreenManager.GetRoot(),
+	})
+	ScreenManager.BringToFront(overlay)
+
+	local card = Create("Frame", {
+		Name = "Card",
+		Size = UDim2.new(0, CARD_WIDTH, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0.5, 0, 0.47, 0),
+		BorderSizePixel = 0,
+		Parent = overlay,
+	})
+	Draw.ApplyCorner(card, CARD_RADIUS)
+	Draw.ApplyPadding(card, CARD_PADDING)
+	Draw.ApplyListLayout(card, 10, "Vertical")
+
+	local themeConn = ThemeEngine.Changed:Connect(function()
+		card.BackgroundColor3 = ThemeEngine.Current.Surface
+	end)
+	card.BackgroundColor3 = ThemeEngine.Current.Surface
+
+	Label.new({
+		Text = props.Title or "Konfirmasi",
+		Bold = true,
+		Size = UDim2.new(1, 0, 0, 20),
+		Parent = card,
+	})
+
+	if props.Message then
+		local messageLabel = Label.new({
+			Text = props.Message,
+			Variant = "Dim",
+			TextSize = 13,
+			Size = UDim2.new(1, 0, 0, 0),
+			Parent = card,
+		})
+		messageLabel.Instance.TextWrapped = true
+		messageLabel.Instance.AutomaticSize = Enum.AutomaticSize.Y
+	end
+
+	local buttonRow = Create("Frame", {
+		Name = "ButtonRow",
+		Size = UDim2.new(1, 0, 0, BUTTON_HEIGHT),
+		BackgroundTransparency = 1,
+		Parent = card,
+	})
+	Draw.ApplyListLayout(buttonRow, BUTTON_GAP, "Horizontal")
+
+	local closed = false
+	local outsideClickConnection = nil
+
+	local function close()
+		if closed then return end
+		closed = true
+
+		if outsideClickConnection then
+			outsideClickConnection:Disconnect()
+		end
+
+		Tween.Quick(overlay, { BackgroundTransparency = 1 }, ANIM_DURATION)
+		local tween = Tween.Quick(card, { Position = UDim2.new(0.5, 0, 0.49, 0) }, ANIM_DURATION)
+		tween.Completed:Connect(function()
+			themeConn:Disconnect()
+			overlay:Destroy()
+		end)
+	end
+
+	ButtonComponent.new({
+		Text = props.CancelText or "Batal",
+		Size = UDim2.new(0.5, -BUTTON_GAP / 2, 1, 0),
+		Parent = buttonRow,
+		Callback = function()
+			close()
+			if props.OnCancel then
+				props.OnCancel()
+			end
+		end,
+	})
+
+	local confirmButton = ButtonComponent.new({
+		Text = props.ConfirmText or "Konfirmasi",
+		Size = UDim2.new(0.5, -BUTTON_GAP / 2, 1, 0),
+		Parent = buttonRow,
+		Callback = function()
+			close()
+			if props.OnConfirm then
+				props.OnConfirm()
+			end
+		end,
+	})
+
+	if props.Danger then
+		confirmButton.Instance.BackgroundColor3 = DANGER_COLOR
+		local input = InputHandler.new(confirmButton.Instance)
+		input.HoverStart:Connect(function()
+			Tween.Quick(confirmButton.Instance, { BackgroundColor3 = DANGER_COLOR_HOVER }, 0.15)
+		end)
+		input.HoverEnd:Connect(function()
+			Tween.Quick(confirmButton.Instance, { BackgroundColor3 = DANGER_COLOR }, 0.15)
+		end)
+	end
+
+	if props.DismissOnOutsideClick then
+		local input = InputHandler.new(overlay)
+		outsideClickConnection = input.PressEnd:Connect(function(wasClick)
+			if wasClick then
+				close()
+				if props.OnCancel then
+					props.OnCancel()
+				end
+			end
+		end)
+	end
+
+	Tween.Quick(overlay, { BackgroundTransparency = 0.45 }, ANIM_DURATION)
+	Tween.Quick(card, { Position = UDim2.new(0.5, 0, 0.45, 0) }, ANIM_DURATION)
+
+	return { Close = close }
+end
+
+return Modal
+end
+
 Modules["Components/Feedback/Notification"] = function(...)
 local Import = ...
 local Create = Import('Core/Create')
@@ -619,6 +775,7 @@ local CONTAINER_WIDTH = 280
 local CONTAINER_MARGIN = 16
 local CARD_PADDING = 12
 local CARD_GAP = 8
+local ACTIONS_GAP = 12
 local ACCENT_BAR_WIDTH = 3
 local DEFAULT_DURATION = 4
 local SLIDE_DISTANCE = 40
@@ -673,6 +830,8 @@ function Notification.Show(props)
     local self = BaseComponent.new(card)
     setmetatable(self, Notification)
 
+    self._actionInputs = {}
+
     self:OnThemeChanged(function(theme)
         card.BackgroundColor3 = theme.Surface
     end)
@@ -709,6 +868,7 @@ function Notification.Show(props)
         Text = props.Title or 'Notification', 
         Bold = true,
         Size = UDim2.new(1, 0, 0, 18),
+        LayoutOrder = 1,
         Parent = content,
     })
     self:AddChild(self._title)
@@ -719,11 +879,55 @@ function Notification.Show(props)
             Size = UDim2.new(1, 0, 0, 0),
             Variant = 'Dim',
             TextSize = 13,
+            LayoutOrder = 2,
             Parent = content
         })
         self._message.Instance.TextWrapped = true
         self._message.Instance.AutomaticSize = Enum.AutomaticSize.Y
         self:AddChild(self._message)
+    end
+
+    if props.Actions and #props.Actions > 0 then
+        local actionsRow = Create('Frame', {
+            Name = 'Actions',
+            Size = UDim2.new(1, 0, 0, 20),
+            BackgroundTransparency = 1,
+            LayoutOrder = 3,
+            Parent = content,
+        })
+        Draw.ApplyListLayout(actionsRow, ACTIONS_GAP, 'Horizontal')
+
+        for _, action in props.Actions do
+            local actionButton = Create('TextButton', {
+                Name = 'ActionButton',
+                Size = UDim2.new(0, 0, 1, 0),
+                AutomaticSize = Enum.AutomaticSize.X,
+                BackgroundTransparency = 1,
+                Text = action.Text or 'Action',
+                TextSize = 12,
+                Font = Enum.Font.GothamBold,
+                Parent = actionsRow,
+            })
+
+            self:OnThemeChanged(function(theme)
+                actionButton.TextColor3 = accentColor or theme.Accent
+            end)
+
+            local actionInput = InputHandler.new(actionButton)
+            actionInput.PressEnd:Connect(function(wasClick)
+                if not wasClick then return end
+
+                if action.Callback then
+                    action.Callback()
+                end
+
+                if action.CloseOnClick ~= false then
+                    self:Close()
+                end
+            end)
+
+            table.insert(self._actionInputs, actionInput)
+        end
     end
 
     self._input = InputHandler.new(card)
@@ -769,10 +973,192 @@ function Notification:Destroy()
         self._input = nil
     end
 
+    for _, actionInput in self._actionInputs do
+        actionInput:Destroy()
+    end
+    table.clear(self._actionInputs)
+
     BaseComponent.Destroy(self)
 end
 
 return Notification
+end
+
+Modules["Components/Feedback/ProgressBar"] = function(...)
+local Import = ...
+local Create = Import('Core/Create')
+local Draw = Import('Core/Draw')
+local Tween = Import('Core/Tween')
+local BaseComponent = Import('Components/Base/BaseComponent')
+local Label = Import('Components/Basic/Label')
+
+local ProgressBar = setmetatable({}, {__index = BaseComponent})
+ProgressBar.__index = ProgressBar
+
+local CONTAINER_HEIGHT = 40
+local LABEL_ROW_HEIGHT = 18
+local TRACK_HEIGHT = 8
+local FILL_TWEEN_DURATION = 0.2
+local INDETERMINATE_DURATION = 0.9
+
+function ProgressBar.new(props)
+	props = props or {}
+
+	local inst = Create('Frame', {
+		Name = 'NeroProgressBar',
+		Size = UDim2.new(1, 0, 0, CONTAINER_HEIGHT),
+		BackgroundTransparency = 1,
+		Parent = props.Parent
+	})
+
+	local self = BaseComponent.new(inst)
+	setmetatable(self, ProgressBar)
+
+	self._min = props.Min or 0
+	self._max = props.Max or 100
+	assert(self._max > self._min, 'ProgressBar.new: Max harus lebih besar dari Min')
+
+	self._value = math.clamp(props.Default or self._min, self._min, self._max)
+	self._showPercentage = props.ShowPercentage ~= false
+	self._indeterminate = false
+	self._indeterminateTween = nil
+	self._fillTween = nil
+
+	self._label = Label.new({
+		Text = props.Text or 'Progress',
+		Size = UDim2.new(1, -50, 0, LABEL_ROW_HEIGHT),
+		Parent = inst,
+	})
+	self:AddChild(self._label)
+
+	if self._showPercentage then
+		self._percentLabel = Label.new({
+			Text = '',
+			Size = UDim2.new(0, 50, 0, LABEL_ROW_HEIGHT),
+			Position = UDim2.new(1, -50, 0, 0),
+			TextXAlignment = Enum.TextXAlignment.Right,
+			Variant = 'Dim',
+			Parent = inst,
+		})
+		self:AddChild(self._percentLabel)
+	end
+
+	local track = Create('Frame', {
+		Name = 'Track',
+		Size = UDim2.new(1, 0, 0, TRACK_HEIGHT),
+		Position = UDim2.new(0, 0, 1, -TRACK_HEIGHT),
+		BorderSizePixel = 0,
+		Parent = inst,
+	})
+	Draw.ApplyCorner(track, TRACK_HEIGHT / 2)
+	self._track = track
+
+	local fill = Create('Frame', {
+		Name = 'Fill',
+		Size = UDim2.new(0, 0, 1, 0),
+		BorderSizePixel = 0,
+		Parent = track,
+	})
+	Draw.ApplyCorner(fill, TRACK_HEIGHT / 2)
+	self._fill = fill
+
+	self:OnThemeChanged(function(theme)
+		track.BackgroundColor3 = theme.Border
+		fill.BackgroundColor3 = theme.Accent
+	end)
+
+	self:_updateVisual(false)
+
+	if props.Indeterminate then
+		self:SetIndeterminate(true)
+	end
+
+	return self
+end
+
+function ProgressBar:_percent()
+	return (self._value - self._min) / (self._max - self._min)
+end
+
+function ProgressBar:_updateVisual(animated)
+	if self._indeterminate then return end
+
+	local p = self:_percent()
+
+	if self._fillTween then
+		self._fillTween:Cancel()
+	end
+
+	if animated then
+		self._fillTween = Tween.Quick(self._fill, { Size = UDim2.new(p, 0, 1, 0) }, FILL_TWEEN_DURATION)
+	else
+		self._fill.Size = UDim2.new(p, 0, 1, 0)
+	end
+
+	if self._percentLabel then
+		self._percentLabel:SetText(math.floor(p * 100) .. '%')
+	end
+end
+
+function ProgressBar:SetValue(value, animated)
+	if self._indeterminate then
+		self:SetIndeterminate(false)
+	end
+
+	self._value = math.clamp(value, self._min, self._max)
+	self:_updateVisual(animated ~= false)
+end
+
+function ProgressBar:GetValue()
+	return self._value
+end
+
+function ProgressBar:SetIndeterminate(isIndeterminate)
+	self._indeterminate = isIndeterminate
+
+	if self._indeterminateTween then
+		self._indeterminateTween:Cancel()
+		self._indeterminateTween = nil
+	end
+
+	if self._percentLabel then
+		self._percentLabel.Instance.Visible = not isIndeterminate
+	end
+
+	if isIndeterminate then
+		self._fill.Size = UDim2.new(0.3, 0, 1, 0)
+
+		local function loop()
+			self._fill.Position = UDim2.new(0, 0, 0, 0)
+			self._indeterminateTween = Tween.new(self._fill, { Position = UDim2.new(0.7, 0, 0, 0) }, INDETERMINATE_DURATION, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+			self._indeterminateTween.Completed:Connect(function()
+				if self._indeterminate then
+					loop()
+				end
+			end)
+			self._indeterminateTween:Play()
+		end
+		loop()
+	else
+		self._fill.Position = UDim2.new(0, 0, 0, 0)
+		self:_updateVisual(false)
+	end
+end
+
+function ProgressBar:Destroy()
+	if self._fillTween then
+		self._fillTween:Destroy()
+		self._fillTween = nil
+	end
+	if self._indeterminateTween then
+		self._indeterminateTween:Destroy()
+		self._indeterminateTween = nil
+	end
+
+	BaseComponent.Destroy(self)
+end
+
+return ProgressBar
 end
 
 Modules["Components/Feedback/Tooltip"] = function(...)
@@ -2286,8 +2672,9 @@ Dropdown.__index = Dropdown
 local CONTAINER_HEIGHT = 36
 local SELECT_BUTTON_SIZE = UDim2.new(0, 140, 0, 28)
 local OPTION_HEIGHT = 28
+local SEARCH_HEIGHT = 30
 local POPUP_RADIUS = 6
-local POPUP_MAX_HEIGHT = 160
+local POPUP_MAX_HEIGHT = 200
 local CHECK_SIZE = 14
 local ACTIVE_TRANSPARENCY = 0.85
 
@@ -2312,10 +2699,12 @@ function Dropdown.new(props)
 
 	self._options = options
 	self._isMulti = props.IsMulti == true
+	self._searchable = props.Searchable == true
 	self._placeholder = props.Placeholder or "Pilih..."
 	self._open = false
 	self._popup = nil
 	self._optionRows = {}
+	self._searchBox = nil
 
 	if self._isMulti then
 		self._selected = {}
@@ -2421,12 +2810,24 @@ function Dropdown:_refreshAllOptionVisuals()
 	end
 end
 
+function Dropdown:_filterOptions(query)
+	query = query:lower()
+
+	for optionText, row in self._optionRows do
+		local match = query == "" or optionText:lower():find(query, 1, true) ~= nil
+		row.Button.Visible = match
+	end
+end
+
 function Dropdown:_ensurePopup()
 	if self._popup then return end
 
+	local listHeight = math.min(#self._options * OPTION_HEIGHT, POPUP_MAX_HEIGHT)
+	local popupHeight = listHeight + (self._searchable and SEARCH_HEIGHT or 0)
+
 	local popup = Create("Frame", {
 		Name = "NeroDropdownPopup",
-		Size = UDim2.new(0, SELECT_BUTTON_SIZE.X.Offset, 0, math.min(#self._options * OPTION_HEIGHT, POPUP_MAX_HEIGHT)),
+		Size = UDim2.new(0, SELECT_BUTTON_SIZE.X.Offset, 0, popupHeight),
 		BorderSizePixel = 0,
 		Visible = false,
 	})
@@ -2437,7 +2838,35 @@ function Dropdown:_ensurePopup()
 		popup.BackgroundColor3 = theme.Surface
 	end)
 
-	for _, optionText in self._options do
+	if self._searchable then
+		local searchBox = Create("TextBox", {
+			Name = "Search",
+			Size = UDim2.new(1, 0, 0, SEARCH_HEIGHT),
+			BackgroundTransparency = 1,
+			PlaceholderText = "Cari...",
+			Text = "",
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextSize = 12,
+			Font = Enum.Font.GothamMedium,
+			ClearTextOnFocus = false,
+			LayoutOrder = 0,
+			Parent = popup,
+		})
+		Draw.ApplyPadding(searchBox, { top = 0, bottom = 0, left = 10, right = 10 })
+
+		self:OnThemeChanged(function(theme)
+			searchBox.TextColor3 = theme.Text
+			searchBox.PlaceholderColor3 = theme.TextDim
+		end)
+
+		searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+			self:_filterOptions(searchBox.Text)
+		end)
+
+		self._searchBox = searchBox
+	end
+
+	for index, optionText in self._options do
 		local optionButton = Create("TextButton", {
 			Name = "Option_" .. optionText,
 			Size = UDim2.new(1, 0, 0, OPTION_HEIGHT),
@@ -2447,6 +2876,7 @@ function Dropdown:_ensurePopup()
 			TextSize = 13,
 			Font = Enum.Font.GothamMedium,
 			BackgroundTransparency = 1,
+			LayoutOrder = index,
 			Parent = popup,
 		})
 
@@ -2537,6 +2967,12 @@ function Dropdown:Open()
 	self._popup.Visible = true
 	self._open = true
 	self._chevron.Rotation = 180
+
+	if self._searchBox then
+		self._searchBox.Text = ""
+		self:_filterOptions("")
+	end
+
 	self._outsideClickConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		if gameProcessed then return end
 		if input.UserInputType ~= Enum.UserInputType.MouseButton1
@@ -2629,6 +3065,41 @@ function Dropdown:SetValue(value)
 	self:_refreshOptionVisual(previousValue)
 	self:_refreshOptionVisual(value)
 	self.OnValueChanged:Fire(self._value)
+end
+
+function Dropdown:SetOptions(newOptions)
+	assert(type(newOptions) == "table" and #newOptions > 0, "Dropdown:SetOptions butuh array berisi minimal 1 opsi")
+
+	if self._open then
+		self:Close()
+	end
+
+	if self._popup then
+		self._popup:Destroy()
+		self._popup = nil
+		table.clear(self._optionRows)
+		self._searchBox = nil
+	end
+
+	self._options = newOptions
+
+	if self._isMulti then
+		local newSelected, newValue = {}, {}
+		for _, v in self._value do
+			if table.find(newOptions, v) then
+				newSelected[v] = true
+				table.insert(newValue, v)
+			end
+		end
+		self._selected = newSelected
+		self._value = newValue
+	else
+		if not table.find(newOptions, self._value) then
+			self._value = newOptions[1]
+		end
+	end
+
+	self._selectButton.Text = self:_getDisplayText()
 end
 
 function Dropdown:GetValue()
@@ -4086,6 +4557,7 @@ local Notification = Import("Components/Feedback/Notification")
 local TextBox = Import("Components/Input/TextBox")
 local Paragraph = Import("Components/Basic/Paragraph")
 local SaveManager = Import("Components/Extras/SaveManager")
+local ProgressBar = Import("Components/Feedback/ProgressBar")
 local Icons = Import("Assets/Icons")
 
 
@@ -4125,6 +4597,7 @@ local function attachComponentHelpers(container)
 	container.AddInput = make(TextBox)
 	container.AddParagraph = make(Paragraph)
 	container.AddSaveManager = make(SaveManager)
+	container.AddProgressBar = make(ProgressBar)
 
 	function container:AddSection(props)
 		if type(props) == "string" then

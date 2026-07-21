@@ -17,8 +17,9 @@ Dropdown.__index = Dropdown
 local CONTAINER_HEIGHT = 36
 local SELECT_BUTTON_SIZE = UDim2.new(0, 140, 0, 28)
 local OPTION_HEIGHT = 28
+local SEARCH_HEIGHT = 30
 local POPUP_RADIUS = 6
-local POPUP_MAX_HEIGHT = 160
+local POPUP_MAX_HEIGHT = 200
 local CHECK_SIZE = 14
 local ACTIVE_TRANSPARENCY = 0.85
 
@@ -43,10 +44,12 @@ function Dropdown.new(props)
 
 	self._options = options
 	self._isMulti = props.IsMulti == true
+	self._searchable = props.Searchable == true
 	self._placeholder = props.Placeholder or "Pilih..."
 	self._open = false
 	self._popup = nil
 	self._optionRows = {}
+	self._searchBox = nil
 
 	if self._isMulti then
 		self._selected = {}
@@ -152,12 +155,24 @@ function Dropdown:_refreshAllOptionVisuals()
 	end
 end
 
+function Dropdown:_filterOptions(query)
+	query = query:lower()
+
+	for optionText, row in self._optionRows do
+		local match = query == "" or optionText:lower():find(query, 1, true) ~= nil
+		row.Button.Visible = match
+	end
+end
+
 function Dropdown:_ensurePopup()
 	if self._popup then return end
 
+	local listHeight = math.min(#self._options * OPTION_HEIGHT, POPUP_MAX_HEIGHT)
+	local popupHeight = listHeight + (self._searchable and SEARCH_HEIGHT or 0)
+
 	local popup = Create("Frame", {
 		Name = "NeroDropdownPopup",
-		Size = UDim2.new(0, SELECT_BUTTON_SIZE.X.Offset, 0, math.min(#self._options * OPTION_HEIGHT, POPUP_MAX_HEIGHT)),
+		Size = UDim2.new(0, SELECT_BUTTON_SIZE.X.Offset, 0, popupHeight),
 		BorderSizePixel = 0,
 		Visible = false,
 	})
@@ -168,7 +183,35 @@ function Dropdown:_ensurePopup()
 		popup.BackgroundColor3 = theme.Surface
 	end)
 
-	for _, optionText in self._options do
+	if self._searchable then
+		local searchBox = Create("TextBox", {
+			Name = "Search",
+			Size = UDim2.new(1, 0, 0, SEARCH_HEIGHT),
+			BackgroundTransparency = 1,
+			PlaceholderText = "Cari...",
+			Text = "",
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextSize = 12,
+			Font = Enum.Font.GothamMedium,
+			ClearTextOnFocus = false,
+			LayoutOrder = 0,
+			Parent = popup,
+		})
+		Draw.ApplyPadding(searchBox, { top = 0, bottom = 0, left = 10, right = 10 })
+
+		self:OnThemeChanged(function(theme)
+			searchBox.TextColor3 = theme.Text
+			searchBox.PlaceholderColor3 = theme.TextDim
+		end)
+
+		searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+			self:_filterOptions(searchBox.Text)
+		end)
+
+		self._searchBox = searchBox
+	end
+
+	for index, optionText in self._options do
 		local optionButton = Create("TextButton", {
 			Name = "Option_" .. optionText,
 			Size = UDim2.new(1, 0, 0, OPTION_HEIGHT),
@@ -178,6 +221,7 @@ function Dropdown:_ensurePopup()
 			TextSize = 13,
 			Font = Enum.Font.GothamMedium,
 			BackgroundTransparency = 1,
+			LayoutOrder = index,
 			Parent = popup,
 		})
 
@@ -268,6 +312,12 @@ function Dropdown:Open()
 	self._popup.Visible = true
 	self._open = true
 	self._chevron.Rotation = 180
+
+	if self._searchBox then
+		self._searchBox.Text = ""
+		self:_filterOptions("")
+	end
+
 	self._outsideClickConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		if gameProcessed then return end
 		if input.UserInputType ~= Enum.UserInputType.MouseButton1
@@ -360,6 +410,41 @@ function Dropdown:SetValue(value)
 	self:_refreshOptionVisual(previousValue)
 	self:_refreshOptionVisual(value)
 	self.OnValueChanged:Fire(self._value)
+end
+
+function Dropdown:SetOptions(newOptions)
+	assert(type(newOptions) == "table" and #newOptions > 0, "Dropdown:SetOptions butuh array berisi minimal 1 opsi")
+
+	if self._open then
+		self:Close()
+	end
+
+	if self._popup then
+		self._popup:Destroy()
+		self._popup = nil
+		table.clear(self._optionRows)
+		self._searchBox = nil
+	end
+
+	self._options = newOptions
+
+	if self._isMulti then
+		local newSelected, newValue = {}, {}
+		for _, v in self._value do
+			if table.find(newOptions, v) then
+				newSelected[v] = true
+				table.insert(newValue, v)
+			end
+		end
+		self._selected = newSelected
+		self._value = newValue
+	else
+		if not table.find(newOptions, self._value) then
+			self._value = newOptions[1]
+		end
+	end
+
+	self._selectButton.Text = self:_getDisplayText()
 end
 
 function Dropdown:GetValue()
