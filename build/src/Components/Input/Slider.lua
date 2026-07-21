@@ -54,16 +54,34 @@ function Slider.new(props)
     })
     self:AddChild(self._label)
 
-    self._valueLabel = Label.new({
-        Text = tostring(self._value),
-        Size = UDim2.new(0, 50, 0, LABEL_ROW_HEIGHT),
+    local valueBox = Create('TextBox', {
+		Name = 'ValueInput',
+		Size = UDim2.new(0, 50, 0, LABEL_ROW_HEIGHT),
 		Position = UDim2.new(1, -50, 0, 0),
+		BackgroundTransparency = 1,
+		Text = tostring(self._value),
 		TextXAlignment = Enum.TextXAlignment.Right,
-		Variant = "Dim",
-        Parent = inst
-    })
+		TextSize = 14,
+		Font = Enum.Font.GothamMedium,
+		ClearTextOnFocus = false,
+		Parent = inst,
+	})
+	self._valueBox = valueBox
 
-    self:AddChild(self._valueLabel)
+	self:OnThemeChanged(function(theme)
+		valueBox.TextColor3 = theme.TextDim
+	end)
+
+	valueBox.FocusLost:Connect(function()
+		local number = tonumber(valueBox.Text)
+		if number then
+			self:SetValue(number, true)
+		else
+			valueBox.Text = tostring(self._value)
+		end
+	end)
+
+    self:AddChild(self._valueBox)
 
     local track = Create('Frame', {
         Name = 'Track',
@@ -119,7 +137,7 @@ function Slider.new(props)
 			handle.Position = handlePos
 		end
 
-		self._valueLabel:SetText(tostring(self._value))
+		self._valueBox.Text = tostring(self._value)
 	end
 	self._updateVisual = updateVisual
 

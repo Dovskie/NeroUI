@@ -360,6 +360,81 @@ end
 return Label
 end
 
+Modules["Components/Basic/Paragraph"] = function(...)
+local Import = ...
+local Create = Import('Core/Create')
+local Draw = Import('Core/Draw')
+local BaseComponent = Import('Components/Base/BaseComponent')
+
+local Paragraph = setmetatable({}, {__index = BaseComponent})
+Paragraph.__index = Paragraph
+
+function Paragraph.new(props)
+    props = props or {}
+
+    local inst = Create('Frame', {
+        Name = 'NeroParagraph',
+        Size = UDim2.new(1, 0, 0, 0),
+        AutomaticSize = Enum.AutomaticSize.Y,
+        BackgroundTransparency = 1,
+        Parent = props.Parent
+    })
+    Draw.ApplyListLayout(inst, 4, 'Vertical')
+
+    local self = BaseComponent.new(inst)
+    setmetatable(self, Paragraph)
+
+    if props.Title then
+        self._title = Create('TextLabel', {
+            Name = 'Title',
+            Size = UDim2.new(1, 0, 0, 18),
+            BackgroundTransparency = 1,
+            Text = props.Title,
+            TextSize = 14,
+            Font = Enum.Font.GothamBold,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            LayoutOrder = 1,
+            Parent = inst,
+        })
+        self:OnThemeChanged(function(theme)
+            self._title.TextColor3 = theme.Text
+        end)
+    end
+
+    self._content = Create('TextLabel', {
+        Name = 'Content',
+        Size = UDim2.new(1, 0, 0, 0),
+        AutomaticSize = Enum.AutomaticSize.Y,
+        BackgroundTransparency = 1,
+        Text = props.Text or '',
+        TextWrapped = true,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextYAlignment = Enum.TextYAlignment.Top,
+        TextSize = 13,
+        Font = Enum.Font.GothamMedium,
+        LayoutOrder = 2,
+        Parent = inst,
+    })
+    self:OnThemeChanged(function(theme)
+        self._content.TextColor3 = theme.TextDim
+    end)
+
+    return self
+end
+
+function Paragraph:SetText(text)
+    self._content.Text = text
+end
+
+function Paragraph:SetTitle(text)
+    if self._title then
+        self._title.Text = text
+    end
+end
+
+return Paragraph
+end
+
 Modules["Components/Basic/Separator"] = function(...)
 local Import = ...
 local Create = Import('Core/Create')
@@ -391,6 +466,140 @@ function Separator.new(props)
 end
 
 return Separator
+end
+
+Modules["Components/Extras/SaveManager"] = function(...)
+local Import = ...
+local Create = Import('Core/Create')
+local Draw = Import('Core/Draw')
+local BaseComponent = Import('Components/Base/BaseComponent')
+local Dropdown = Import('Components/Selection/Dropdown')
+local ButtonComponent = Import('Components/Basic/Button')
+local TextBox = Import('Components/Input/TextBox')
+local Notification = Import('Components/Feedback/Notification')
+local ConfigManager = Import('Extras/ConfigManager')
+
+local SaveManager = setmetatable({}, {__index = BaseComponent})
+SaveManager.__index = SaveManager
+
+local function currentConfigList()
+    local list = ConfigManager.ListConfigs()
+    if #list == 0 then
+        list = { 'Default' }
+    end
+    return list
+end
+
+function SaveManager.new(props)
+    props = props or {}
+
+    local inst = Create('Frame', {
+        Name = 'NeroSaveManager',
+        Size = UDim2.new(1, 0, 0, 0),
+        AutomaticSize = Enum.AutomaticSize.Y,
+        BackgroundTransparency = 1,
+        Parent = props.Parent
+    })
+    Draw.ApplyListLayout(inst, 8, 'Vertical')
+
+    local self = BaseComponent.new(inst)
+    setmetatable(self, SaveManager)
+
+    self._nameInput = TextBox.new({
+        Text = 'Nama Config',
+        Placeholder = 'contoh: preset1',
+        Parent = inst,
+    })
+    self:AddChild(self._nameInput)
+
+    self._configDropdown = Dropdown.new({
+        Text = 'Load Config',
+        Options = currentConfigList(),
+        Parent = inst,
+    })
+    self:AddChild(self._configDropdown)
+
+    local buttonRow = Create('Frame', {
+        Name = 'ButtonRow',
+        Size = UDim2.new(1, 0, 0, 32),
+        BackgroundTransparency = 1,
+        Parent = inst,
+    })
+    Draw.ApplyListLayout(buttonRow, 8, 'Horizontal')
+
+    self._saveButton = ButtonComponent.new({
+        Text = 'Save',
+        Size = UDim2.new(0, 100, 0, 32),
+        Parent = buttonRow,
+        Callback = function()
+            self:_handleSave()
+        end,
+    })
+    self:AddChild(self._saveButton)
+
+    self._loadButton = ButtonComponent.new({
+        Text = 'Load',
+        Size = UDim2.new(0, 100, 0, 32),
+        Parent = buttonRow,
+        Callback = function()
+            self:_handleLoad()
+        end,
+    })
+    self:AddChild(self._loadButton)
+
+    self._deleteButton = ButtonComponent.new({
+        Text = 'Delete',
+        Size = UDim2.new(0, 100, 0, 32),
+        Parent = buttonRow,
+        Callback = function()
+            self:_handleDelete()
+        end,
+    })
+    self:AddChild(self._deleteButton)
+
+    return self
+end
+
+function SaveManager:_handleSave()
+    local name = self._nameInput:GetValue()
+    if not name or name == '' then
+        Notification.Show({ Title = 'Save gagal', Message = 'Nama config ga boleh kosong', Type = 'Error' })
+        return
+    end
+
+    local ok, err = ConfigManager.Save(name)
+    if ok then
+        Notification.Show({ Title = 'Config disimpan', Message = ('"%s" berhasil disimpan.'):format(name), Type = 'Success' })
+    else
+        Notification.Show({ Title = 'Save gagal', Message = tostring(err), Type = 'Error' })
+    end
+end
+
+function SaveManager:_handleLoad()
+    local name = self._configDropdown:GetValue()
+    if not name then return end
+
+    local ok, err = ConfigManager.Load(name)
+    if ok then
+        Notification.Show({ Title = 'Config dimuat', Message = ('"%s" berhasil dimuat.'):format(name), Type = 'Success' })
+    else
+        Notification.Show({ Title = 'Load gagal', Message = tostring(err), Type = 'Error' })
+    end
+end
+
+function SaveManager:_handleDelete()
+    local name = self._configDropdown:GetValue()
+    if not name then return end
+
+    local ok = ConfigManager.DeleteConfig(name)
+    if ok then
+        Notification.Show({ Title = 'Config dihapus', Message = ('"%s" berhasil dihapus.'):format(name), Type = 'Warning' })
+    else
+        Notification.Show({ Title = 'Delete gagal', Message = 'Config ga ketemu atau executor ga support', Type = 'Error' })
+    end
+end
+
+return SaveManager
 end
 
 Modules["Components/Feedback/Notification"] = function(...)
@@ -923,16 +1132,34 @@ function Slider.new(props)
     })
     self:AddChild(self._label)
 
-    self._valueLabel = Label.new({
-        Text = tostring(self._value),
-        Size = UDim2.new(0, 50, 0, LABEL_ROW_HEIGHT),
+    local valueBox = Create('TextBox', {
+		Name = 'ValueInput',
+		Size = UDim2.new(0, 50, 0, LABEL_ROW_HEIGHT),
 		Position = UDim2.new(1, -50, 0, 0),
+		BackgroundTransparency = 1,
+		Text = tostring(self._value),
 		TextXAlignment = Enum.TextXAlignment.Right,
-		Variant = "Dim",
-        Parent = inst
-    })
+		TextSize = 14,
+		Font = Enum.Font.GothamMedium,
+		ClearTextOnFocus = false,
+		Parent = inst,
+	})
+	self._valueBox = valueBox
 
-    self:AddChild(self._valueLabel)
+	self:OnThemeChanged(function(theme)
+		valueBox.TextColor3 = theme.TextDim
+	end)
+
+	valueBox.FocusLost:Connect(function()
+		local number = tonumber(valueBox.Text)
+		if number then
+			self:SetValue(number, true)
+		else
+			valueBox.Text = tostring(self._value)
+		end
+	end)
+
+    self:AddChild(self._valueBox)
 
     local track = Create('Frame', {
         Name = 'Track',
@@ -988,7 +1215,7 @@ function Slider.new(props)
 			handle.Position = handlePos
 		end
 
-		self._valueLabel:SetText(tostring(self._value))
+		self._valueBox.Text = tostring(self._value)
 	end
 	self._updateVisual = updateVisual
 
@@ -1081,6 +1308,130 @@ function Slider:Destroy()
 end
 
 return Slider
+end
+
+Modules["Components/Input/TextBox"] = function(...)
+local Import = ...
+local Create = Import('Core/Create')
+local Draw = Import('Core/Draw')
+local Signal = Import('Core/Signal')
+local BaseComponent = Import('Components/Base/BaseComponent')
+local Label = Import('Components/Basic/Label')
+
+local TextBox = setmetatable({}, {__index = BaseComponent})
+TextBox.__index = TextBox
+
+local CONTAINER_HEIGHT = 36
+local BOX_SIZE = UDim2.new(0, 140, 0, 28)
+local BOX_RADIUS = 6
+
+function TextBox.new(props)
+    props = props or {}
+
+    local inst = Create('Frame', {
+        Name = 'NeroTextBox',
+        Size = UDim2.new(1, 0, 0, CONTAINER_HEIGHT),
+        BackgroundTransparency = 1,
+        Parent = props.Parent
+    })
+
+    local self = BaseComponent.new(inst)
+    setmetatable(self, TextBox)
+
+    self.OnValueChanged = Signal.new()
+    self.OnSubmit = Signal.new()
+    self:BindCallback(self.OnValueChanged, props.Callback)
+    self:BindCallback(self.OnSubmit, props.OnSubmit)
+
+    self._numeric = props.Numeric == true
+    self._value = props.Default ~= nil and tostring(props.Default) or ''
+
+    self._label = Label.new({
+        Text = props.Text or 'Input',
+        Size = UDim2.new(1, -150, 1, 0),
+        Parent = inst
+    })
+    self:AddChild(self._label)
+
+    local box = Create('Frame', {
+        Name = 'Box',
+        Size = props.BoxSize or BOX_SIZE,
+        AnchorPoint = Vector2.new(1, 0.5),
+        Position = UDim2.new(1, 0, 0.5, 0),
+        BorderSizePixel = 0,
+        Parent = inst,
+    })
+    Draw.ApplyCorner(box, BOX_RADIUS)
+    self._box = box
+
+    local textBox = Create('TextBox', {
+        Name = 'Input',
+        Size = UDim2.new(1, -16, 1, 0),
+        Position = UDim2.new(0, 8, 0, 0),
+        BackgroundTransparency = 1,
+        PlaceholderText = props.Placeholder or '...',
+        Text = self._value,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextSize = 13,
+        Font = Enum.Font.GothamMedium,
+        ClearTextOnFocus = false,
+        Parent = box,
+    })
+    self._textBox = textBox
+
+    textBox.FocusLost:Connect(function(enterPressed)
+        local text = textBox.Text
+
+        if self._numeric then
+            local number = tonumber(text)
+            if not number then
+                textBox.Text = self._value
+                return
+            end
+            if props.Min then number = math.max(number, props.Min) end
+            if props.Max then number = math.min(number, props.Max) end
+            text = tostring(number)
+            textBox.Text = text
+        end
+
+        if text == self._value then return end
+
+        self._value = text
+        self.OnValueChanged:Fire(self._value)
+
+        if enterPressed then
+            self.OnSubmit:Fire(self._value)
+        end
+    end)
+
+    self:OnThemeChanged(function(theme)
+        box.BackgroundColor3 = theme.Surface
+        textBox.TextColor3 = theme.Text
+        textBox.PlaceholderColor3 = theme.TextDim
+    end)
+
+    return self
+end
+
+function TextBox:GetValue()
+    return self._numeric and tonumber(self._value) or self._value
+end
+
+function TextBox:SetValue(value, fireEvent)
+    self._value = tostring(value)
+    self._textBox.Text = self._value
+    if fireEvent ~= false then
+        self.OnValueChanged:Fire(self:GetValue())
+    end
+end
+
+function TextBox:Destroy()
+    self.OnValueChanged:Destroy()
+    self.OnSubmit:Destroy()
+    BaseComponent.Destroy(self)
+end
+
+return TextBox
 end
 
 Modules["Components/Input/Toggle"] = function(...)
@@ -3732,7 +4083,11 @@ local ColorPicker = Import("Components/Selection/ColorPicker")
 local SearchBar = Import("Components/Search/SearchBar")
 local ButtonComponent = Import("Components/Basic/Button")
 local Notification = Import("Components/Feedback/Notification")
+local TextBox = Import("Components/Input/TextBox")
+local Paragraph = Import("Components/Basic/Paragraph")
+local SaveManager = Import("Components/Extras/SaveManager")
 local Icons = Import("Assets/Icons")
+
 
 local Watermark = Import("Extras/Watermark")
 local ConfigManager = Import("Extras/ConfigManager")
@@ -3767,6 +4122,9 @@ local function attachComponentHelpers(container)
 	container.AddDropdown = make(Dropdown)
 	container.AddColorPicker = make(ColorPicker)
 	container.AddSearchBar = make(SearchBar)
+	container.AddInput = make(TextBox)
+	container.AddParagraph = make(Paragraph)
+	container.AddSaveManager = make(SaveManager)
 
 	function container:AddSection(props)
 		if type(props) == "string" then

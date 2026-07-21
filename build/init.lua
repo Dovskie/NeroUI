@@ -40,7 +40,11 @@ local ColorPicker = Import("Components/Selection/ColorPicker")
 local SearchBar = Import("Components/Search/SearchBar")
 local ButtonComponent = Import("Components/Basic/Button")
 local Notification = Import("Components/Feedback/Notification")
+local TextBox = Import("Components/Input/TextBox")
+local Paragraph = Import("Components/Basic/Paragraph")
+local SaveManager = Import("Components/Extras/SaveManager")
 local Icons = Import("Assets/Icons")
+
 
 local Watermark = Import("Extras/Watermark")
 local ConfigManager = Import("Extras/ConfigManager")
@@ -75,6 +79,9 @@ local function attachComponentHelpers(container)
 	container.AddDropdown = make(Dropdown)
 	container.AddColorPicker = make(ColorPicker)
 	container.AddSearchBar = make(SearchBar)
+	container.AddInput = make(TextBox)
+	container.AddParagraph = make(Paragraph)
+	container.AddSaveManager = make(SaveManager)
 
 	function container:AddSection(props)
 		if type(props) == "string" then
