@@ -2037,7 +2037,7 @@ function Dropdown:_getDisplayText()
 	elseif count == 1 then
 		return "  " .. self._value[1]
 	else
-		return "  " .. count .. " dipilih"
+		return "  " .. count .. " Selected"
 	end
 end
 
@@ -2452,6 +2452,35 @@ end
 function Draw.ApplyListLayout(inst, gap, direction)
     Draw.ListLayout(gap, direction).Parent = inst
     return inst
+end
+
+function Draw.CornerMask(parent, radius, corner, color)
+    assert(typeof(parent) == 'Instance', 'Draw.CornerMask butuh parent berupa Instance')
+    assert(type(corner) == 'string', 'Draw.CornerMask butuh corner berupa string')
+
+    local anchor, position
+    if corner == "TopLeft" then
+        anchor, position = Vector2.new(0, 0), UDim2.new(0, 0, 0, 0)
+    elseif corner == "TopRight" then
+        anchor, position = Vector2.new(1, 0), UDim2.new(1, 0, 0, 0)
+    elseif corner == "BottomLeft" then
+        anchor, position = Vector2.new(0, 1), UDim2.new(0, 0, 1, 0)
+    elseif corner == "BottomRight" then
+        anchor, position = Vector2.new(1, 1), UDim2.new(1, 0, 1, 0)
+    else
+        error('Draw.CornerMask: corner harus salah satu dari "TopLeft", "TopRight", "BottomLeft", "BottomRight"')
+    end
+
+    return Create("Frame", {
+        Name = "CornerMask",
+        Size = UDim2.new(0, radius, 0, radius),
+        AnchorPoint = anchor,
+        Position = position,
+        BackgroundColor3 = color or Color3.fromRGB(0, 0, 0),
+        BorderSizePixel = 0,
+        ZIndex = 5,
+        Parent = parent,
+    })
 end
 
 return Draw
@@ -3789,38 +3818,91 @@ local Window = {}
 Window.__index = Window
 
 local WINDOW_DEFAULT_SIZE = UDim2.new(0, 550, 0, 400)
+local WINDOW_RADIUS = 10
 local SIDEBAR_WIDTH = 140
 local TITLEBAR_HEIGHT = 36
+local TAB_ACCENT_BAR_WIDTH = 3
 
 local _reopenKeybindCounter = 0
 
-local function createTabButton(sidebar, text)
+local function createTabButton(sidebar, props)
+	props = props or {}
+	local hasIcon = props.Icon ~= nil
+
 	local instance = Create("TextButton", {
 		Name = "TabButton",
 		Size = UDim2.new(1, 0, 0, 32),
 		AutoButtonColor = false,
-		Text = text,
-		TextSize = 13,
-		Font = Enum.Font.GothamMedium,
+		Text = "",
 		BorderSizePixel = 0,
+		ClipsDescendants = true,
 		Parent = sidebar,
 	})
 	Draw.ApplyCorner(instance, 6)
+
+	local accentBar = Create("Frame", {
+		Name = "AccentBar",
+		Size = UDim2.new(0, TAB_ACCENT_BAR_WIDTH, 1, -10),
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 0, 0.5, 0),
+		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+		BorderSizePixel = 0,
+		BackgroundTransparency = 1,
+		Parent = instance,
+	})
+	Draw.ApplyCorner(accentBar, TAB_ACCENT_BAR_WIDTH / 2)
+
+	local iconImage
+	if hasIcon then
+		iconImage = Icons.CreateImage(props.Icon, {
+			Name = "Icon",
+			Size = UDim2.new(0, 14, 0, 14),
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.new(0, TAB_ACCENT_BAR_WIDTH + 10, 0.5, 0),
+			Parent = instance,
+		})
+	end
+
+	local textLabel = Create("TextLabel", {
+		Name = "Text",
+		Size = UDim2.new(1, -(TAB_ACCENT_BAR_WIDTH + 10 + (hasIcon and 22 or 10)), 1, 0),
+		Position = UDim2.new(0, TAB_ACCENT_BAR_WIDTH + 10 + (hasIcon and 22 or 0), 0, 0),
+		BackgroundTransparency = 1,
+		Text = props.Text or "Tab",
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextSize = 13,
+		Font = Enum.Font.GothamMedium,
+		Parent = instance,
+	})
 
 	local input = InputHandler.new(instance)
 	local isActive = false
 
 	local function refreshColor()
 		if isActive then
-			instance.BackgroundColor3 = ThemeEngine.Current.Accent
-			instance.TextColor3 = Color3.fromRGB(255, 255, 255)
-		else
 			instance.BackgroundColor3 = ThemeEngine.Current.Surface
-			instance.TextColor3 = ThemeEngine.Current.Text
+			textLabel.TextColor3 = ThemeEngine.Current.Text
+			if iconImage then iconImage.ImageColor3 = ThemeEngine.Current.Text end
+			accentBar.BackgroundColor3 = ThemeEngine.Current.Accent
+			accentBar.BackgroundTransparency = 0
+		elseif input.Hovering then
+			instance.BackgroundColor3 = ThemeEngine.Current.Surface
+			textLabel.TextColor3 = ThemeEngine.Current.Text
+			if iconImage then iconImage.ImageColor3 = ThemeEngine.Current.Text end
+			accentBar.BackgroundTransparency = 1
+		else
+			instance.BackgroundColor3 = ThemeEngine.Current.Background
+			textLabel.TextColor3 = ThemeEngine.Current.TextDim
+			if iconImage then iconImage.ImageColor3 = ThemeEngine.Current.TextDim end
+			accentBar.BackgroundTransparency = 1
 		end
 	end
 
+	instance.BackgroundTransparency = 0
+
 	local themeConnection = ThemeEngine.Changed:Connect(refreshColor)
+	input.HoverStart:Connect(refreshColor)
+	input.HoverEnd:Connect(refreshColor)
 	refreshColor()
 
 	return {
@@ -3882,7 +3964,7 @@ function NeroUI.new(props)
 		BorderSizePixel = 0,
 		ClipsDescendants = true,
 	})
-	Draw.ApplyCorner(root, 10)
+	Draw.ApplyCorner(root, WINDOW_RADIUS)
 	ScreenManager.Register(root)
 	self._root = root
 
@@ -3897,10 +3979,28 @@ function NeroUI.new(props)
 		BorderSizePixel = 0,
 		Parent = root,
 	})
+	Draw.ApplyCorner(titlebar, WINDOW_RADIUS)
+
+	local titlebarMaskBL = Draw.CornerMask(titlebar, WINDOW_RADIUS, "BottomLeft", ThemeEngine.Current.Surface)
+	local titlebarMaskBR = Draw.CornerMask(titlebar, WINDOW_RADIUS, "BottomRight", ThemeEngine.Current.Surface)
+
+	local titlebarDivider = Create("Frame", {
+		Name = "Divider",
+		Size = UDim2.new(1, 0, 0, 1),
+		Position = UDim2.new(0, 0, 1, -1),
+		BorderSizePixel = 0,
+		ZIndex = 6,
+		Parent = titlebar,
+	})
+
 	table.insert(self._themeConnections, ThemeEngine.Changed:Connect(function()
 		titlebar.BackgroundColor3 = ThemeEngine.Current.Surface
+		titlebarMaskBL.BackgroundColor3 = ThemeEngine.Current.Surface
+		titlebarMaskBR.BackgroundColor3 = ThemeEngine.Current.Surface
+		titlebarDivider.BackgroundColor3 = ThemeEngine.Current.Border
 	end))
 	titlebar.BackgroundColor3 = ThemeEngine.Current.Surface
+	titlebarDivider.BackgroundColor3 = ThemeEngine.Current.Border
 
 	local TITLE_ICON_SIZE = 16
 	local TITLE_LEFT_PADDING = 12
@@ -4003,10 +4103,31 @@ function NeroUI.new(props)
 		BorderSizePixel = 0,
 		Parent = root,
 	})
+	Draw.ApplyCorner(sidebar, WINDOW_RADIUS)
+
+	local sidebarMaskTL = Draw.CornerMask(sidebar, WINDOW_RADIUS, "TopLeft", ThemeEngine.Current.Surface)
+	local sidebarMaskTR = Draw.CornerMask(sidebar, WINDOW_RADIUS, "TopRight", ThemeEngine.Current.Surface)
+	local sidebarMaskBR = Draw.CornerMask(sidebar, WINDOW_RADIUS, "BottomRight", ThemeEngine.Current.Surface)
+
+	local sidebarDivider = Create("Frame", {
+		Name = "Divider",
+		Size = UDim2.new(0, 1, 1, 0),
+		Position = UDim2.new(1, -1, 0, 0),
+		BorderSizePixel = 0,
+		ZIndex = 6,
+		Parent = sidebar,
+	})
+
 	table.insert(self._themeConnections, ThemeEngine.Changed:Connect(function()
 		sidebar.BackgroundColor3 = ThemeEngine.Current.Surface
+		sidebarMaskTL.BackgroundColor3 = ThemeEngine.Current.Surface
+		sidebarMaskTR.BackgroundColor3 = ThemeEngine.Current.Surface
+		sidebarMaskBR.BackgroundColor3 = ThemeEngine.Current.Surface
+		sidebarDivider.BackgroundColor3 = ThemeEngine.Current.Border
 	end))
 	sidebar.BackgroundColor3 = ThemeEngine.Current.Surface
+	sidebarDivider.BackgroundColor3 = ThemeEngine.Current.Border
+
 	Draw.ApplyPadding(sidebar, 8)
 	Draw.ApplyListLayout(sidebar, 4, "Vertical")
 	self._sidebar = sidebar
@@ -4035,7 +4156,10 @@ function Window:AddTab(props)
 
 	attachComponentHelpers(scroll)
 
-	local tabButtonHandle = createTabButton(self._sidebar, props.Title or "Tab")
+	local tabButtonHandle = createTabButton(self._sidebar, {
+		Text = props.Title or "Tab",
+		Icon = props.Icon,
+	})
 	tabButtonHandle.Input.PressEnd:Connect(function(wasClick)
 		if wasClick then
 			self:_setActiveTab(tab)

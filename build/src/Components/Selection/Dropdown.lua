@@ -119,7 +119,7 @@ function Dropdown:_getDisplayText()
 	elseif count == 1 then
 		return "  " .. self._value[1]
 	else
-		return "  " .. count .. " dipilih"
+		return "  " .. count .. " Selected"
 	end
 end
 
