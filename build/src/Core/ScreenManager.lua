@@ -90,11 +90,18 @@ function ScreenManager.BringToFront(frame)
     assert(typeof(frame) == 'Instance' and frame:IsA("GuiObject"), "ScreenManager.BringToFront butuh GuiObject")
 
     _order += 1
-    frame.ZIndex = _order
 
+    local function applyRelative(inst)
+        if inst:GetAttribute("_neroBaseZ") == nil then
+            inst:SetAttribute("_neroBaseZ", inst.ZIndex)
+        end
+        inst.ZIndex = _order + inst:GetAttribute("_neroBaseZ")
+    end
+
+    applyRelative(frame)
     for _, descendant in frame:GetDescendants() do
         if descendant:IsA("GuiObject") then
-            descendant.ZIndex += _order
+            applyRelative(descendant)
         end
     end
 end

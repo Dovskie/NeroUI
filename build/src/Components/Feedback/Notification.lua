@@ -74,7 +74,7 @@ function Notification.Show(props)
 
     local accentBar = Create('Frame', {
         Name = 'AccentBar',
-        Size = UDim2.new(0, ACCENT_BAR_WIDTH, 1, 0),
+        Size = UDim2.new(0, ACCENT_BAR_WIDTH, 0, 0),
         BorderSizePixel = 0,
         Parent = card
     })
@@ -91,6 +91,14 @@ function Notification.Show(props)
     })
     Draw.ApplyPadding(content, {top = CARD_PADDING, bottom = CARD_PADDING, left = CARD_PADDING + ACCENT_BAR_WIDTH + 6, right = CARD_PADDING})
     Draw.ApplyListLayout(content, 2, 'Vertical')
+
+    local function syncAccentBarHeight()
+        accentBar.Size = UDim2.new(0, ACCENT_BAR_WIDTH, 0, content.AbsoluteSize.Y)
+    end
+
+    local sizeConn = content:GetPropertyChangedSignal("AbsoluteSize"):Connect(syncAccentBarHeight)
+    table.insert(self._connections, sizeConn)
+    syncAccentBarHeight()
 
     self._title = Label.new({
         Text = props.Title or 'Notification', 

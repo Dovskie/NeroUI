@@ -470,7 +470,7 @@ function Notification.Show(props)
 
     local accentBar = Create('Frame', {
         Name = 'AccentBar',
-        Size = UDim2.new(0, ACCENT_BAR_WIDTH, 1, 0),
+        Size = UDim2.new(0, ACCENT_BAR_WIDTH, 0, 0),
         BorderSizePixel = 0,
         Parent = card
     })
@@ -487,6 +487,14 @@ function Notification.Show(props)
     })
     Draw.ApplyPadding(content, {top = CARD_PADDING, bottom = CARD_PADDING, left = CARD_PADDING + ACCENT_BAR_WIDTH + 6, right = CARD_PADDING})
     Draw.ApplyListLayout(content, 2, 'Vertical')
+
+    local function syncAccentBarHeight()
+        accentBar.Size = UDim2.new(0, ACCENT_BAR_WIDTH, 0, content.AbsoluteSize.Y)
+    end
+
+    local sizeConn = content:GetPropertyChangedSignal("AbsoluteSize"):Connect(syncAccentBarHeight)
+    table.insert(self._connections, sizeConn)
+    syncAccentBarHeight()
 
     self._title = Label.new({
         Text = props.Title or 'Notification', 
@@ -1448,7 +1456,7 @@ function SearchBar.new(props)
 	self.OnQueryChanged = Signal.new()
 	self.OnSubmit = Signal.new()
 	self:BindCallback(self.OnQueryChanged, props.Callback)
-	self.BindCallback(self.OnSubmit, props.OnSubmit)
+	self:BindCallback(self.OnSubmit, props.OnSubmit)
 
 	local icon = Icons.CreateImage("search", {
 		Name = "Icon",
@@ -1971,7 +1979,6 @@ function Dropdown.new(props)
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextSize = 13,
 		Font = Enum.Font.GothamMedium,
-		TextColor3 = Color3.fromRGB(255, 255, 255),
 		BorderSizePixel = 0,
 		Parent = container,
 	})
@@ -1987,10 +1994,6 @@ function Dropdown.new(props)
 	})
 	self._chevron = chevron
 
-	self:OnThemeChanged(function(theme)
-		chevron.ImageColor3 = Color3.fromRGB(255, 255, 255)
-	end)
-
 	self._input = InputHandler.new(selectButton)
 	self._input.PressEnd:Connect(function(wasClick)
 		if wasClick then
@@ -1999,7 +2002,9 @@ function Dropdown.new(props)
 	end)
 
 	self:OnThemeChanged(function(theme)
+		chevron.ImageColor3 = theme.Text
 		selectButton.BackgroundColor3 = theme.Surface
+		selectButton.TextColor3 = theme.Text
 	end)
 
 	return self
@@ -2538,11 +2543,18 @@ function ScreenManager.BringToFront(frame)
     assert(typeof(frame) == 'Instance' and frame:IsA("GuiObject"), "ScreenManager.BringToFront butuh GuiObject")
 
     _order += 1
-    frame.ZIndex = _order
 
+    local function applyRelative(inst)
+        if inst:GetAttribute("_neroBaseZ") == nil then
+            inst:SetAttribute("_neroBaseZ", inst.ZIndex)
+        end
+        inst.ZIndex = _order + inst:GetAttribute("_neroBaseZ")
+    end
+
+    applyRelative(frame)
     for _, descendant in frame:GetDescendants() do
         if descendant:IsA("GuiObject") then
-            descendant.ZIndex += _order
+            applyRelative(descendant)
         end
     end
 end
@@ -2605,7 +2617,7 @@ function Signal:Fire(...)
         task.spawn(handler.fn, ...)
         
         if handler.once then
-            self._removeHandler(handler)
+            self:_removeHandler(handler)
         end
     end
 end

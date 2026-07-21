@@ -46,7 +46,7 @@ function Signal:Fire(...)
         task.spawn(handler.fn, ...)
         
         if handler.once then
-            self._removeHandler(handler)
+            self:_removeHandler(handler)
         end
     end
 end

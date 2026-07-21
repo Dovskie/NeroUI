@@ -61,7 +61,6 @@ function Dropdown.new(props)
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextSize = 13,
 		Font = Enum.Font.GothamMedium,
-		TextColor3 = Color3.fromRGB(255, 255, 255),
 		BorderSizePixel = 0,
 		Parent = container,
 	})
@@ -77,10 +76,6 @@ function Dropdown.new(props)
 	})
 	self._chevron = chevron
 
-	self:OnThemeChanged(function(theme)
-		chevron.ImageColor3 = Color3.fromRGB(255, 255, 255)
-	end)
-
 	self._input = InputHandler.new(selectButton)
 	self._input.PressEnd:Connect(function(wasClick)
 		if wasClick then
@@ -89,7 +84,9 @@ function Dropdown.new(props)
 	end)
 
 	self:OnThemeChanged(function(theme)
+		chevron.ImageColor3 = theme.Text
 		selectButton.BackgroundColor3 = theme.Surface
+		selectButton.TextColor3 = theme.Text
 	end)
 
 	return self

@@ -29,7 +29,7 @@ function SearchBar.new(props)
 	self.OnQueryChanged = Signal.new()
 	self.OnSubmit = Signal.new()
 	self:BindCallback(self.OnQueryChanged, props.Callback)
-	self.BindCallback(self.OnSubmit, props.OnSubmit)
+	self:BindCallback(self.OnSubmit, props.OnSubmit)
 
 	local icon = Icons.CreateImage("search", {
 		Name = "Icon",
