@@ -44,6 +44,7 @@ local TextBox = Import("Components/Input/TextBox")
 local Paragraph = Import("Components/Basic/Paragraph")
 local SaveManager = Import("Components/Extras/SaveManager")
 local ProgressBar = Import("Components/Feedback/ProgressBar")
+local DataTable = Import("Components/Data/DataTable")
 local Icons = Import("Assets/Icons")
 
 
@@ -60,16 +61,43 @@ NeroUI.ConfigManager = ConfigManager
 NeroUI.KeybindManager = KeybindManager
 NeroUI.ThemeEngine = ThemeEngine
 
+function NeroUI._bindDependency(component, dependsOn)
+    assert(dependsOn.Component ~= nil, "DependsOn butuh field 'Component' yang mengarah ke komponen lain")
+    assert(dependsOn.Component.OnValueChanged ~= nil, "DependsOn butuh komponen yang punya OnValueChanged Signal")
+
+    local function evaluate(value)
+        local shouldShow
+        if dependsOn.Predicate then
+            shouldShow = dependsOn.Predicate(value) and true or false
+        elseif dependsOn.Value ~= nil then
+            shouldShow = value == dependsOn.Value
+        else
+            shouldShow = value == true
+        end
+        component.Instance.Visible = shouldShow
+    end
+
+    evaluate(dependsOn.Component:GetValue())
+
+    local connection = dependsOn.Component.OnValueChanged:Connect(evaluate)
+    table.insert(component._connections, connection)
+end
+
 local function attachComponentHelpers(container)
 	local function make(componentClass)
-		return function(_, props)
-			props = props or {}
-			props.Parent = container:GetContentFrame()
-			local component = componentClass.new(props)
-			container:AddComponent(component)
-			return component
-		end
-	end
+    return function(_, props)
+        props = props or {}
+        props.Parent = container:GetContentFrame()
+        local component = componentClass.new(props)
+        container:AddComponent(component)
+
+        if props.DependsOn then
+            NeroUI._bindDependency(component, props.DependsOn)
+        end
+
+        return component
+    end
+end
 
 	container.AddLabel = make(Label)
 	container.AddButton = make(ButtonComponent)
@@ -83,6 +111,7 @@ local function attachComponentHelpers(container)
 	container.AddInput = make(TextBox)
 	container.AddParagraph = make(Paragraph)
 	container.AddSaveManager = make(SaveManager)
+	container.AddDataTable = make(DataTable)
 	container.AddProgressBar = make(ProgressBar)
 
 	function container:AddSection(props)
@@ -166,6 +195,14 @@ function NeroUI.new(props)
 	end
 	if props.Watermark then
 		Watermark.Configure(props.Watermark)
+	end
+	if props.AutoLoadConfig then
+		task.defer(function()
+			local ok, err = ConfigManager.Load(props.AutoLoadConfig)
+			if not ok then
+				warn("NeroUI: AutoLoadConfig(\"" .. tostring(props.AutoLoadConfig) .. "\") gagal -> " .. tostring(err))
+			end
+		end)
 	end
 
 	local self = setmetatable({}, Window)
