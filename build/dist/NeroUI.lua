@@ -560,6 +560,15 @@ function SaveManager.new(props)
     return self
 end
 
+function SaveManager:_refreshDropdown(preferredValue)
+    local list = currentConfigList()
+    self._configDropdown:SetOptions(list)
+
+    if preferredValue and table.find(list, preferredValue) then
+        self._configDropdown:SetValue(preferredValue)
+    end
+end
+
 function SaveManager:_handleSave()
     local name = self._nameInput:GetValue()
     if not name or name == '' then
@@ -570,6 +579,7 @@ function SaveManager:_handleSave()
     local ok, err = ConfigManager.Save(name)
     if ok then
         Notification.Show({ Title = 'Config disimpan', Message = ('"%s" berhasil disimpan.'):format(name), Type = 'Success' })
+        self:_refreshDropdown(name)
     else
         Notification.Show({ Title = 'Save gagal', Message = tostring(err), Type = 'Error' })
     end
@@ -594,6 +604,7 @@ function SaveManager:_handleDelete()
     local ok = ConfigManager.DeleteConfig(name)
     if ok then
         Notification.Show({ Title = 'Config dihapus', Message = ('"%s" berhasil dihapus.'):format(name), Type = 'Warning' })
+        self:_refreshDropdown()
     else
         Notification.Show({ Title = 'Delete gagal', Message = 'Config ga ketemu atau executor ga support', Type = 'Error' })
     end
