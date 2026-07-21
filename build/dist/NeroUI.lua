@@ -1937,6 +1937,7 @@ local SELECT_BUTTON_SIZE = UDim2.new(0, 140, 0, 28)
 local OPTION_HEIGHT = 28
 local POPUP_RADIUS = 6
 local POPUP_MAX_HEIGHT = 160
+local CHECK_SIZE = 14
 
 function Dropdown.new(props)
 	props = props or {}
@@ -1956,11 +1957,29 @@ function Dropdown.new(props)
 
 	self.OnValueChanged = Signal.new()
 	self:BindCallback(self.OnValueChanged, props.Callback)
-	
+
 	self._options = options
-	self._value = (table.find(options, props.Default) and props.Default) or options[1]
+	self._isMulti = props.IsMulti == true
+	self._placeholder = props.Placeholder or "Pilih..."
 	self._open = false
 	self._popup = nil
+	self._optionRows = {}
+
+	if self._isMulti then
+		self._selected = {}
+		self._value = {}
+
+		if type(props.Default) == "table" then
+			for _, v in props.Default do
+				if table.find(options, v) and not self._selected[v] then
+					self._selected[v] = true
+					table.insert(self._value, v)
+				end
+			end
+		end
+	else
+		self._value = (table.find(options, props.Default) and props.Default) or options[1]
+	end
 
 	self._label = Label.new({
 		Text = props.Text or "Dropdown",
@@ -1975,7 +1994,7 @@ function Dropdown.new(props)
 		AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.new(1, 0, 0.5, 0),
 		AutoButtonColor = false,
-		Text = "  " .. self._value,
+		Text = self:_getDisplayText(),
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextSize = 13,
 		Font = Enum.Font.GothamMedium,
@@ -1996,9 +2015,7 @@ function Dropdown.new(props)
 
 	self._input = InputHandler.new(selectButton)
 	self._input.PressEnd:Connect(function(wasClick)
-		if wasClick then
-			self:Toggle()
-		end
+		if wasClick then self:Toggle() end
 	end)
 
 	self:OnThemeChanged(function(theme)
@@ -2010,10 +2027,27 @@ function Dropdown.new(props)
 	return self
 end
 
-function Dropdown:_ensurePopup()
-	if self._popup then
-		return
+function Dropdown:_getDisplayText()
+	if not self._isMulti then return "  " .. tostring(self._value) end
+
+	local count = #self._value
+	if count == 0 then
+		return "  " .. self._placeholder
+	elseif count == 1 then
+		return "  " .. self._value[1]
+	else
+		return "  " .. count .. " dipilih"
 	end
+end
+
+function Dropdown:_refreshOptionVisual(optionText)
+	local row = self._optionRows[optionText]
+	if not row or not row.Check then return end
+	row.Check.BackgroundTransparency = self._selected[optionText] and 0 or 1
+end
+
+function Dropdown:_ensurePopup()
+	if self._popup then return end
 
 	local popup = Create("Frame", {
 		Name = "NeroDropdownPopup",
@@ -2041,6 +2075,27 @@ function Dropdown:_ensurePopup()
 			Parent = popup,
 		})
 
+		local checkFrame = nil
+		if self._isMulti then
+			checkFrame = Create("Frame", {
+				Name = "Check",
+				Size = UDim2.new(0, CHECK_SIZE, 0, CHECK_SIZE),
+				AnchorPoint = Vector2.new(1, 0.5),
+				Position = UDim2.new(1, -8, 0.5, 0),
+				BorderSizePixel = 1,
+				BackgroundTransparency = self._selected[optionText] and 0 or 1,
+				Parent = optionButton,
+			})
+			Draw.ApplyCorner(checkFrame, 4)
+
+			self:OnThemeChanged(function(theme)
+				checkFrame.BorderColor3 = theme.TextDim
+				checkFrame.BackgroundColor3 = ThemeEngine.Current.Accent
+			end)
+		end
+
+		self._optionRows[optionText] = { Button = optionButton, Check = checkFrame }
+
 		local optionInput = InputHandler.new(optionButton)
 		optionInput.HoverStart:Connect(function()
 			optionButton.BackgroundTransparency = 0
@@ -2050,7 +2105,13 @@ function Dropdown:_ensurePopup()
 			optionButton.BackgroundTransparency = 1
 		end)
 		optionInput.PressEnd:Connect(function(wasClick)
-			if wasClick then
+			if not wasClick then
+				return
+			end
+
+			if self._isMulti then
+				self:ToggleValue(optionText)
+			else
 				self:SetValue(optionText)
 				self:Close()
 			end
@@ -2072,9 +2133,7 @@ function Dropdown:_positionPopup()
 end
 
 function Dropdown:Open()
-	if self._open then
-		return
-	end
+	if self._open then return end
 
 	self:_ensurePopup()
 	self._popup.Parent = ScreenManager.GetRoot()
@@ -2084,38 +2143,28 @@ function Dropdown:Open()
 	self._open = true
 	self._chevron.Rotation = 180
 	self._outsideClickConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
-		if gameProcessed then
-			return
-		end
+		if gameProcessed then return end
 		if input.UserInputType ~= Enum.UserInputType.MouseButton1
 			and input.UserInputType ~= Enum.UserInputType.Touch then
 			return
 		end
 
 		task.defer(function()
-			if not self._open then
-				return
-			end
+			if not self._open then return end
 			local mouse = UserInputService:GetMouseLocation()
 			local overSelectButton = self:_isPointInside(self._selectButton, mouse)
 			local overPopup = self:_isPointInside(self._popup, mouse)
-			if not overSelectButton and not overPopup then
-				self:Close()
-			end
+			if not overSelectButton and not overPopup then self:Close() end
 		end)
 	end)
 end
 
 function Dropdown:Close()
-	if not self._open then
-		return
-	end
+	if not self._open then return end
 
 	self._open = false
 	self._chevron.Rotation = 0
-	if self._popup then
-		self._popup.Visible = false
-	end
+	if self._popup then self._popup.Visible = false end
 
 	if self._outsideClickConnection then
 		self._outsideClickConnection:Disconnect()
@@ -2138,20 +2187,62 @@ function Dropdown:_isPointInside(guiObject, point)
 		and point.Y >= pos.Y and point.Y <= pos.Y + size.Y
 end
 
-function Dropdown:SetValue(value)
-	if not table.find(self._options, value) then
-		return
+function Dropdown:ToggleValue(value)
+	if not self._isMulti then return end
+	if not table.find(self._options, value) then return end
+
+	if self._selected[value] then
+		self._selected[value] = nil
+		local index = table.find(self._value, value)
+
+		if index then table.remove(self._value, index) end
+	else
+		self._selected[value] = true
+		table.insert(self._value, value)
 	end
-	if value == self._value then
+
+	self:_refreshOptionVisual(value)
+	self._selectButton.Text = self:_getDisplayText()
+	self.OnValueChanged:Fire(self:GetValue())
+end
+
+function Dropdown:SetValue(value)
+	if self._isMulti then
+		if type(value) ~= "table" then return end
+
+		self._selected = {}
+		self._value = {}
+		for _, v in value do
+			if table.find(self._options, v) and not self._selected[v] then
+				self._selected[v] = true
+				table.insert(self._value, v)
+			end
+		end
+
+		for optionText in self._optionRows do self:_refreshOptionVisual(optionText) end
+
+		self._selectButton.Text = self:_getDisplayText()
+		self.OnValueChanged:Fire(self:GetValue())
 		return
 	end
 
+	if not table.find(self._options, value) then return end
+	if value == self._value then return end
+
 	self._value = value
-	self._selectButton.Text = "  " .. value
+	self._selectButton.Text = self:_getDisplayText()
 	self.OnValueChanged:Fire(self._value)
 end
 
 function Dropdown:GetValue()
+	if self._isMulti then
+		local copy = {}
+		for _, v in self._value do
+			table.insert(copy, v)
+		end
+		return copy
+	end
+
 	return self._value
 end
 
