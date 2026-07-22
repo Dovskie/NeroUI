@@ -109,11 +109,16 @@ end
 
 Modules["Components/Base/BaseComponent"] = function(...)
 local Import = ...
+local Create = Import('Core/Create')
+local Draw = Import('Core/Draw')
 local Signal = Import('Core/Signal')
 local ThemeEngine = Import('Theme/ThemeEngine')
+local Icons = Import('Assets/Icons')
 
 local BaseComponent = {}
 BaseComponent.__index = BaseComponent
+
+local LOCK_ICON_SIZE = 14
 
 function BaseComponent.new(inst)
     assert(typeof(inst) == 'Instance' and inst:IsA('GuiObject'), 'BaseComponent.new butuh GuiObject sebagai instance utama')
@@ -122,10 +127,13 @@ function BaseComponent.new(inst)
 
     self.Instance = inst
     self.Destroyed = false
+    self.Locked = false
 
     self._themeConn = nil
     self._connections = {}
     self._children = {}
+    self._lockOverlay = nil
+    self._lockThemeConn = nil
 
     return self
 end
@@ -150,6 +158,61 @@ function BaseComponent:OnThemeChanged(callback)
     return connection
 end
 
+function BaseComponent:SetLocked(locked)
+    locked = locked == true
+    if locked == self.Locked then return end
+    self.Locked = locked
+
+    if not self.Instance then return end
+
+    if locked then
+        self.Instance.Active = false
+
+        local overlay = Create('Frame', {
+            Name = 'LockOverlay',
+            Size = UDim2.new(1, 0, 1, 0),
+            BorderSizePixel = 0,
+            BackgroundTransparency = 0.4,
+            Active = true,
+            ZIndex = 1000,
+            Parent = self.Instance,
+        })
+
+        local icon = Icons.CreateImage('lock', {
+            Name = 'LockIcon',
+            Size = UDim2.new(0, LOCK_ICON_SIZE, 0, LOCK_ICON_SIZE),
+            AnchorPoint = Vector2.new(1, 0.5),
+            Position = UDim2.new(1, -8, 0.5, 0),
+            ZIndex = 1001,
+            Parent = overlay,
+        })
+
+        local function refreshColors()
+            overlay.BackgroundColor3 = ThemeEngine.Current.Background
+            icon.ImageColor3 = ThemeEngine.Current.TextDim
+        end
+        self._lockThemeConn = ThemeEngine.Changed:Connect(refreshColors)
+        refreshColors()
+
+        self._lockOverlay = overlay
+    else
+        self.Instance.Active = true
+
+        if self._lockThemeConn then
+            self._lockThemeConn:Disconnect()
+            self._lockThemeConn = nil
+        end
+        if self._lockOverlay then
+            self._lockOverlay:Destroy()
+            self._lockOverlay = nil
+        end
+    end
+end
+
+function BaseComponent:IsLocked()
+    return self.Locked
+end
+
 function BaseComponent:AddChild(childComponent)
     table.insert(self._children, childComponent)
     return childComponent
@@ -159,6 +222,12 @@ function BaseComponent:Destroy()
     if self.Destroyed then return end
 
     self.Destroyed = true
+
+    if self._lockThemeConn then
+        self._lockThemeConn:Disconnect()
+        self._lockThemeConn = nil
+    end
+
     for _, child in self._children do
         child:Destroy()
     end
@@ -856,6 +925,49 @@ function SaveManager.new(props)
     })
     self:AddChild(self._deleteButton)
 
+    Create('Frame', {
+        Name = 'Divider',
+        Size = UDim2.new(1, 0, 0, 1),
+        BackgroundTransparency = 1,
+        Parent = inst,
+    })
+
+    self._exportBox = TextBox.new({
+        Text = 'Config String',
+        Placeholder = 'Klik Export buat generate, atau paste config di sini lalu klik Import',
+        BoxSize = UDim2.new(0, 220, 0, 28),
+        Parent = inst,
+    })
+    self:AddChild(self._exportBox)
+
+    local exportRow = Create('Frame', {
+        Name = 'ExportRow',
+        Size = UDim2.new(1, 0, 0, 32),
+        BackgroundTransparency = 1,
+        Parent = inst,
+    })
+    Draw.ApplyListLayout(exportRow, 8, 'Horizontal')
+
+    self._exportButton = ButtonComponent.new({
+        Text = 'Export',
+        Size = UDim2.new(0, 100, 0, 32),
+        Parent = exportRow,
+        Callback = function()
+            self:_handleExport()
+        end,
+    })
+    self:AddChild(self._exportButton)
+
+    self._importButton = ButtonComponent.new({
+        Text = 'Import',
+        Size = UDim2.new(0, 100, 0, 32),
+        Parent = exportRow,
+        Callback = function()
+            self:_handleImport()
+        end,
+    })
+    self:AddChild(self._importButton)
+
     return self
 end
 
@@ -906,6 +1018,42 @@ function SaveManager:_handleDelete()
         self:_refreshDropdown()
     else
         Notification.Show({ Title = 'Delete gagal', Message = 'Config ga ketemu atau executor ga support', Type = 'Error' })
+    end
+end
+
+function SaveManager:_handleExport()
+    local exported, err = ConfigManager.Export()
+    if not exported then
+        Notification.Show({ Title = 'Export gagal', Message = tostring(err), Type = 'Error' })
+        return
+    end
+
+    self._exportBox:SetValue(exported, false)
+
+    if setclipboard then
+        pcall(setclipboard, exported)
+        Notification.Show({ Title = 'Config di-export', Message = 'String config disalin ke clipboard.', Type = 'Success' })
+    else
+        Notification.Show({
+            Title = 'Config di-export',
+            Message = 'Copy manual dari kolom Config String (executor ga support setclipboard).',
+            Type = 'Success',
+        })
+    end
+end
+
+function SaveManager:_handleImport()
+    local str = self._exportBox:GetValue()
+    if not str or str == '' then
+        Notification.Show({ Title = 'Import gagal', Message = 'Tempel string config dulu di kolom Config String', Type = 'Error' })
+        return
+    end
+
+    local ok, err = ConfigManager.Import(str)
+    if ok then
+        Notification.Show({ Title = 'Config di-import', Message = 'Semua pengaturan berhasil diterapkan.', Type = 'Success' })
+    else
+        Notification.Show({ Title = 'Import gagal', Message = tostring(err), Type = 'Error' })
     end
 end
 
@@ -1064,6 +1212,7 @@ local Import = ...
 local Create = Import('Core/Create')
 local Draw = Import('Core/Draw')
 local Tween = Import('Core/Tween')
+local Signal = Import('Core/Signal')
 local InputHandler = Import('Core/InputHandler')
 local ScreenManager = Import('Core/ScreenManager')
 local BaseComponent = Import('Components/Base/BaseComponent')
@@ -1081,12 +1230,25 @@ local ACCENT_BAR_WIDTH = 3
 local DEFAULT_DURATION = 4
 local SLIDE_DISTANCE = 40
 local ANIM_DURATION = 0.25
+local MAX_HISTORY = 50
 
 local TYPE_COLORS = {
     Success = Color3.fromRGB(87, 201, 122),
     Warning = Color3.fromRGB(230, 180, 60),
     Error = Color3.fromRGB(224, 90, 90)
 }
+Notification.TypeColors = TYPE_COLORS
+Notification._history = {}
+Notification.HistoryChanged = Signal.new()
+
+function Notification.GetHistory()
+    return table.clone(Notification._history)
+end
+
+function Notification.ClearHistory()
+    table.clear(Notification._history)
+    Notification.HistoryChanged:Fire()
+end
 
 local _container = nil
 local _layoutOrderCounter = 0
@@ -1111,7 +1273,18 @@ end
 
 function Notification.Show(props)
     props = props or {}
-    
+
+    table.insert(Notification._history, {
+        Title = props.Title or 'Notification',
+        Message = props.Message,
+        Type = props.Type,
+        Timestamp = os.time(),
+    })
+    if #Notification._history > MAX_HISTORY then
+        table.remove(Notification._history, 1)
+    end
+    Notification.HistoryChanged:Fire()
+
     local container = ensureContainer()
     local accentColor = TYPE_COLORS[props.Type]
 
@@ -4001,6 +4174,257 @@ end
 return Tween
 end
 
+Modules["Extras/CommandPalette"] = function(...)
+local Import = ...
+local Create = Import('Core/Create')
+local Draw = Import('Core/Draw')
+local Tween = Import('Core/Tween')
+local Signal = Import('Core/Signal')
+local InputHandler = Import('Core/InputHandler')
+local ScreenManager = Import('Core/ScreenManager')
+local BaseComponent = Import('Components/Base/BaseComponent')
+local Label = Import('Components/Basic/Label')
+
+local Notification = setmetatable({}, {__index = BaseComponent})
+Notification.__index = Notification
+
+local CONTAINER_WIDTH = 280
+local CONTAINER_MARGIN = 16
+local CARD_PADDING = 12
+local CARD_GAP = 8
+local ACTIONS_GAP = 12
+local ACCENT_BAR_WIDTH = 3
+local DEFAULT_DURATION = 4
+local SLIDE_DISTANCE = 40
+local ANIM_DURATION = 0.25
+local MAX_HISTORY = 50
+
+local TYPE_COLORS = {
+    Success = Color3.fromRGB(87, 201, 122),
+    Warning = Color3.fromRGB(230, 180, 60),
+    Error = Color3.fromRGB(224, 90, 90)
+}
+Notification.TypeColors = TYPE_COLORS
+Notification._history = {}
+Notification.HistoryChanged = Signal.new()
+
+function Notification.GetHistory()
+    return table.clone(Notification._history)
+end
+
+function Notification.ClearHistory()
+    table.clear(Notification._history)
+    Notification.HistoryChanged:Fire()
+end
+
+local _container = nil
+local _layoutOrderCounter = 0
+
+local function ensureContainer()
+    if _container then return _container end
+
+    local container = Create('Frame', {
+        Name = 'NeroNotification',
+        AnchorPoint = Vector2.new(1, 1),
+        Position = UDim2.new(1, -CONTAINER_MARGIN, 1, -CONTAINER_MARGIN),
+        Size = UDim2.new(0, CONTAINER_WIDTH, 0, 0),
+        AutomaticSize = Enum.AutomaticSize.Y,
+        BackgroundTransparency = 1,
+        Parent = ScreenManager.GetRoot()
+    })
+    Draw.ApplyListLayout(container, CARD_GAP, 'Vertical')
+
+    _container = container
+    return container
+end
+
+function Notification.Show(props)
+    props = props or {}
+
+    table.insert(Notification._history, {
+        Title = props.Title or 'Notification',
+        Message = props.Message,
+        Type = props.Type,
+        Timestamp = os.time(),
+    })
+    if #Notification._history > MAX_HISTORY then
+        table.remove(Notification._history, 1)
+    end
+    Notification.HistoryChanged:Fire()
+
+    local container = ensureContainer()
+    local accentColor = TYPE_COLORS[props.Type]
+
+    _layoutOrderCounter += 1
+
+    local card = Create('Frame', {
+        Name = 'NotificationCard',
+        Size = UDim2.new(1, 0, 0, 0),
+        AutomaticSize = Enum.AutomaticSize.Y,
+        BorderSizePixel = 0,
+        LayoutOrder = _layoutOrderCounter,
+        ClipsDescendants = true,
+        Parent = container,
+    })
+    Draw.ApplyCorner(card, 8)
+
+    local self = BaseComponent.new(card)
+    setmetatable(self, Notification)
+
+    self._actionInputs = {}
+
+    self:OnThemeChanged(function(theme)
+        card.BackgroundColor3 = theme.Surface
+    end)
+
+    local accentBar = Create('Frame', {
+        Name = 'AccentBar',
+        Size = UDim2.new(0, ACCENT_BAR_WIDTH, 0, 0),
+        BorderSizePixel = 0,
+        Parent = card
+    })
+    self:OnThemeChanged(function(theme)
+        accentBar.BackgroundColor3 = accentColor or theme.Accent
+    end)
+
+    local content = Create('Frame', {
+        Name = 'Content',
+        Size = UDim2.new(1, 0, 0, 0),
+        AutomaticSize = Enum.AutomaticSize.Y,
+        BackgroundTransparency = 1,
+        Parent = card,
+    })
+    Draw.ApplyPadding(content, {top = CARD_PADDING, bottom = CARD_PADDING, left = CARD_PADDING + ACCENT_BAR_WIDTH + 6, right = CARD_PADDING})
+    Draw.ApplyListLayout(content, 2, 'Vertical')
+
+    local function syncAccentBarHeight()
+        accentBar.Size = UDim2.new(0, ACCENT_BAR_WIDTH, 0, content.AbsoluteSize.Y)
+    end
+
+    local sizeConn = content:GetPropertyChangedSignal("AbsoluteSize"):Connect(syncAccentBarHeight)
+    table.insert(self._connections, sizeConn)
+    syncAccentBarHeight()
+
+    self._title = Label.new({
+        Text = props.Title or 'Notification', 
+        Bold = true,
+        Size = UDim2.new(1, 0, 0, 18),
+        LayoutOrder = 1,
+        Parent = content,
+    })
+    self:AddChild(self._title)
+
+    if props.Message then
+        self._message = Label.new({
+            Text = props.Message,
+            Size = UDim2.new(1, 0, 0, 0),
+            Variant = 'Dim',
+            TextSize = 13,
+            LayoutOrder = 2,
+            Parent = content
+        })
+        self._message.Instance.TextWrapped = true
+        self._message.Instance.AutomaticSize = Enum.AutomaticSize.Y
+        self:AddChild(self._message)
+    end
+
+    if props.Actions and #props.Actions > 0 then
+        local actionsRow = Create('Frame', {
+            Name = 'Actions',
+            Size = UDim2.new(1, 0, 0, 20),
+            BackgroundTransparency = 1,
+            LayoutOrder = 3,
+            Parent = content,
+        })
+        Draw.ApplyListLayout(actionsRow, ACTIONS_GAP, 'Horizontal')
+
+        for _, action in props.Actions do
+            local actionButton = Create('TextButton', {
+                Name = 'ActionButton',
+                Size = UDim2.new(0, 0, 1, 0),
+                AutomaticSize = Enum.AutomaticSize.X,
+                BackgroundTransparency = 1,
+                Text = action.Text or 'Action',
+                TextSize = 12,
+                Font = Enum.Font.GothamBold,
+                Parent = actionsRow,
+            })
+
+            self:OnThemeChanged(function(theme)
+                actionButton.TextColor3 = accentColor or theme.Accent
+            end)
+
+            local actionInput = InputHandler.new(actionButton)
+            actionInput.PressEnd:Connect(function(wasClick)
+                if not wasClick then return end
+
+                if action.Callback then
+                    action.Callback()
+                end
+
+                if action.CloseOnClick ~= false then
+                    self:Close()
+                end
+            end)
+
+            table.insert(self._actionInputs, actionInput)
+        end
+    end
+
+    self._input = InputHandler.new(card)
+    self._input.PressEnd:Connect(function(wasClick)
+        if wasClick then
+            self:Close()
+        end
+    end)
+    
+    self._closed = false
+
+    card.Position = UDim2.new(0, SLIDE_DISTANCE, 0, 0)
+    card.BackgroundTransparency = 1
+    accentBar.BackgroundTransparency = 1
+    Tween.Quick(card, { Position = UDim2.new(0, 0, 0, 0), BackgroundTransparency = 0 }, ANIM_DURATION)
+    Tween.Quick(accentBar, { BackgroundTransparency = 0 }, ANIM_DURATION)
+
+    task.delay(props.Duration or DEFAULT_DURATION, function()
+        if not self._closed then
+            self:Close()
+        end
+    end)
+
+    return self
+end
+
+function Notification:Close()
+    if self._closed then return end
+    self._closed = true
+    local tween = Tween.Quick(self.Instance, {
+        Position = UDim2.new(0, SLIDE_DISTANCE, 0, 0),
+        BackgroundTransparency = 1,
+    }, ANIM_DURATION)
+
+    tween.Completed:Connect(function()
+        self:Destroy()
+    end)
+end
+
+function Notification:Destroy()
+    if self._input then
+        self._input:Destroy()
+        self._input = nil
+    end
+
+    for _, actionInput in self._actionInputs do
+        actionInput:Destroy()
+    end
+    table.clear(self._actionInputs)
+
+    BaseComponent.Destroy(self)
+end
+
+return Notification
+end
+
 Modules["Extras/ConfigManager"] = function(...)
 local HttpService = game:GetService("HttpService")
 
@@ -4047,6 +4471,112 @@ local function deserializeValue(value)
 	return value
 end
 
+local function base64EncodeFallback(data)
+	local B64_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+	local result = {}
+	local byteCount = #data
+
+	for i = 1, byteCount, 3 do
+		local b1, b2, b3 = string.byte(data, i, i + 2)
+		b2 = b2 or 0
+		b3 = b3 or 0
+
+		local n = bit32.lshift(b1, 16) + bit32.lshift(b2, 8) + b3
+
+		local c1 = bit32.band(bit32.rshift(n, 18), 0x3F)
+		local c2 = bit32.band(bit32.rshift(n, 12), 0x3F)
+		local c3 = bit32.band(bit32.rshift(n, 6), 0x3F)
+		local c4 = bit32.band(n, 0x3F)
+
+		local remaining = byteCount - i + 1
+		table.insert(result, string.sub(B64_CHARS, c1 + 1, c1 + 1))
+		table.insert(result, string.sub(B64_CHARS, c2 + 1, c2 + 1))
+		table.insert(result, remaining >= 2 and string.sub(B64_CHARS, c3 + 1, c3 + 1) or "=")
+		table.insert(result, remaining >= 3 and string.sub(B64_CHARS, c4 + 1, c4 + 1) or "=")
+	end
+
+	return table.concat(result)
+end
+
+local function base64DecodeFallback(data)
+	local B64_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+	data = data:gsub("[^%a%d%+%/%=]", "")
+
+	local lookup = {}
+	for index = 1, #B64_CHARS do
+		lookup[string.sub(B64_CHARS, index, index)] = index - 1
+	end
+
+	local result = {}
+	local i = 1
+	local len = #data
+
+	while i <= len do
+		local c1 = lookup[string.sub(data, i, i)]
+		local c2 = lookup[string.sub(data, i + 1, i + 1)]
+		local s3 = string.sub(data, i + 2, i + 2)
+		local s4 = string.sub(data, i + 3, i + 3)
+		local c3 = lookup[s3]
+		local c4 = lookup[s4]
+
+		assert(c1 and c2, "base64Decode: input corrupt")
+
+		local n = bit32.lshift(c1, 18) + bit32.lshift(c2, 12) + bit32.lshift(c3 or 0, 6) + (c4 or 0)
+
+		table.insert(result, string.char(bit32.band(bit32.rshift(n, 16), 0xFF)))
+		if s3 ~= "=" and s3 ~= "" then
+			table.insert(result, string.char(bit32.band(bit32.rshift(n, 8), 0xFF)))
+		end
+		if s4 ~= "=" and s4 ~= "" then
+			table.insert(result, string.char(bit32.band(n, 0xFF)))
+		end
+
+		i += 4
+	end
+
+	return table.concat(result)
+end
+
+local function base64Encode(data)
+	if crypt and crypt.base64encode then
+		return crypt.base64encode(data)
+	end
+	return base64EncodeFallback(data)
+end
+
+local function base64Decode(data)
+	if crypt and crypt.base64decode then
+		return crypt.base64decode(data)
+	end
+	return base64DecodeFallback(data)
+end
+
+local EXPORT_PREFIX = "NEROUI1:"
+
+local function collectData()
+	local data = {}
+	for flagName, component in _registry do
+		local ok, value = pcall(function()
+			return component:GetValue()
+		end)
+		if ok then
+			data[flagName] = serializeValue(value)
+		end
+	end
+	return data
+end
+
+local function applyData(data)
+	for flagName, rawValue in data do
+		local component = _registry[flagName]
+		if component then
+			pcall(function()
+				component:SetValue(deserializeValue(rawValue), false)
+			end)
+		end
+	end
+end
+
 function ConfigManager.Register(flagName, component)
 	assert(type(flagName) == "string" and flagName ~= "", "ConfigManager.Register butuh flagName berupa string")
 	assert(component ~= nil and component.GetValue and component.SetValue,
@@ -4066,15 +4596,7 @@ function ConfigManager.Save(name)
 
 	ensureFolders()
 
-	local data = {}
-	for flagName, component in _registry do
-		local ok, value = pcall(function()
-			return component:GetValue()
-		end)
-		if ok then
-			data[flagName] = serializeValue(value)
-		end
-	end
+	local data = collectData()
 
 	local ok, encoded = pcall(HttpService.JSONEncode, HttpService, data)
 	if not ok then
@@ -4110,14 +4632,46 @@ function ConfigManager.Load(name)
 		return false, "Gagal decode JSON, file config kemungkinan corrupt"
 	end
 
-	for flagName, rawValue in data do
-		local component = _registry[flagName]
-		if component then
-			pcall(function()
-				component:SetValue(deserializeValue(rawValue), false)
-			end)
-		end
+	applyData(data)
+
+	return true
+end
+
+function ConfigManager.Export()
+	local data = collectData()
+
+	local encodeOk, encoded = pcall(HttpService.JSONEncode, HttpService, data)
+	if not encodeOk then
+		return nil, "Gagal encode config jadi JSON: " .. tostring(encoded)
 	end
+
+	local b64Ok, b64 = pcall(base64Encode, encoded)
+	if not b64Ok then
+		return nil, "Gagal encode base64: " .. tostring(b64)
+	end
+
+	return EXPORT_PREFIX .. b64
+end
+
+function ConfigManager.Import(str)
+	assert(type(str) == "string" and str ~= "", "ConfigManager.Import butuh string")
+
+	local payload = str
+	if str:sub(1, #EXPORT_PREFIX) == EXPORT_PREFIX then
+		payload = str:sub(#EXPORT_PREFIX + 1)
+	end
+
+	local b64Ok, decoded = pcall(base64Decode, payload)
+	if not b64Ok then
+		return false, "String config ga valid atau corrupt"
+	end
+
+	local jsonOk, data = pcall(HttpService.JSONDecode, HttpService, decoded)
+	if not jsonOk or type(data) ~= "table" then
+		return false, "String config ga valid atau corrupt"
+	end
+
+	applyData(data)
 
 	return true
 end
@@ -4259,6 +4813,320 @@ function KeybindManager.SetEnabled(enabled)
 end
 
 return KeybindManager
+end
+
+Modules["Extras/NotificationHistory"] = function(...)
+local Import = ...
+local Create = Import('Core/Create')
+local Draw = Import('Core/Draw')
+local Tween = Import('Core/Tween')
+local InputHandler = Import('Core/InputHandler')
+local ScreenManager = Import('Core/ScreenManager')
+local ThemeEngine = Import('Theme/ThemeEngine')
+local Notification = Import('Components/Feedback/Notification')
+
+local NotificationHistory = {}
+NotificationHistory.__index = NotificationHistory
+
+local PANEL_WIDTH = 300
+local LIST_HEIGHT = 300
+local ANIM_DURATION = 0.15
+
+local function formatRelativeTime(timestamp)
+	local delta = os.time() - timestamp
+	if delta < 60 then return 'barusan' end
+	if delta < 3600 then return math.floor(delta / 60) .. 'm lalu' end
+	if delta < 86400 then return math.floor(delta / 3600) .. 'j lalu' end
+	return math.floor(delta / 86400) .. 'h lalu'
+end
+
+function NotificationHistory.new(window, anchorButton)
+	local self = setmetatable({}, NotificationHistory)
+
+	self._window = window
+	self._anchorButton = anchorButton
+	self._visible = false
+	self._rows = {}
+	self._lastSeenCount = #Notification.GetHistory()
+
+	return self
+end
+
+function NotificationHistory:HasUnread()
+	return #Notification.GetHistory() > self._lastSeenCount
+end
+
+function NotificationHistory:Toggle()
+	if self._visible then
+		self:Hide()
+	else
+		self:Show()
+	end
+end
+
+function NotificationHistory:Show()
+	if self._visible then return end
+	if self._window._root and not self._window._root.Visible then return end
+
+	self._visible = true
+	self._lastSeenCount = #Notification.GetHistory()
+	self:_build()
+end
+
+function NotificationHistory:Hide()
+	if not self._visible then return end
+	self._visible = false
+
+	if self._historyChangedConn then
+		self._historyChangedConn:Disconnect()
+		self._historyChangedConn = nil
+	end
+	if self._panelThemeConn then
+		self._panelThemeConn:Disconnect()
+		self._panelThemeConn = nil
+	end
+	if self._headerThemeConn then
+		self._headerThemeConn:Disconnect()
+		self._headerThemeConn = nil
+	end
+	if self._clearInput then
+		self._clearInput:Destroy()
+		self._clearInput = nil
+	end
+	if self._outsideInput then
+		self._outsideInput:Destroy()
+		self._outsideInput = nil
+	end
+
+	self:_clearRows()
+
+	if self._overlay then
+		self._overlay:Destroy()
+		self._overlay = nil
+	end
+end
+
+function NotificationHistory:_build()
+	local overlay = Create('Frame', {
+		Name = 'NeroNotificationHistoryOverlay',
+		Size = UDim2.new(1, 0, 1, 0),
+		BackgroundTransparency = 1,
+		Active = true,
+		Parent = ScreenManager.GetRoot(),
+	})
+	ScreenManager.BringToFront(overlay)
+	self._overlay = overlay
+
+	self._outsideInput = InputHandler.new(overlay)
+	self._outsideInput.PressEnd:Connect(function(wasClick)
+		if wasClick then self:Hide() end
+	end)
+
+	local anchorPos = self._anchorButton.AbsolutePosition
+	local anchorSize = self._anchorButton.AbsoluteSize
+
+	local panel = Create('Frame', {
+		Name = 'Panel',
+		Size = UDim2.new(0, PANEL_WIDTH, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		Position = UDim2.new(0, anchorPos.X + anchorSize.X - PANEL_WIDTH, 0, anchorPos.Y + anchorSize.Y + 6),
+		BorderSizePixel = 0,
+		Active = true,
+		Parent = overlay,
+	})
+	Draw.ApplyCorner(panel, 10)
+	Draw.ApplyPadding(panel, 10)
+	Draw.ApplyListLayout(panel, 8, 'Vertical')
+	self._panel = panel
+
+	self._panelThemeConn = ThemeEngine.Changed:Connect(function()
+		panel.BackgroundColor3 = ThemeEngine.Current.Surface
+	end)
+	panel.BackgroundColor3 = ThemeEngine.Current.Surface
+
+	local headerRow = Create('Frame', {
+		Name = 'HeaderRow',
+		Size = UDim2.new(1, 0, 0, 20),
+		BackgroundTransparency = 1,
+		Parent = panel,
+	})
+
+	local headerLabel = Create('TextLabel', {
+		Name = 'HeaderLabel',
+		Text = 'Notifikasi',
+		Size = UDim2.new(1, -50, 1, 0),
+		BackgroundTransparency = 1,
+		Font = Enum.Font.GothamBold,
+		TextSize = 14,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = headerRow,
+	})
+
+	local clearButton = Create('TextButton', {
+		Name = 'ClearButton',
+		Text = 'Clear',
+		Size = UDim2.new(0, 44, 1, 0),
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, 0, 0, 0),
+		BackgroundTransparency = 1,
+		AutoButtonColor = false,
+		Font = Enum.Font.GothamMedium,
+		TextSize = 12,
+		Parent = headerRow,
+	})
+
+	self._headerThemeConn = ThemeEngine.Changed:Connect(function()
+		headerLabel.TextColor3 = ThemeEngine.Current.Text
+		clearButton.TextColor3 = ThemeEngine.Current.TextDim
+	end)
+	headerLabel.TextColor3 = ThemeEngine.Current.Text
+	clearButton.TextColor3 = ThemeEngine.Current.TextDim
+
+	self._clearInput = InputHandler.new(clearButton)
+	self._clearInput.PressEnd:Connect(function(wasClick)
+		if wasClick then
+			Notification.ClearHistory()
+		end
+	end)
+
+	local listFrame = Create('ScrollingFrame', {
+		Name = 'List',
+		Size = UDim2.new(1, 0, 0, LIST_HEIGHT),
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		CanvasSize = UDim2.new(0, 0, 0, 0),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ScrollBarThickness = 4,
+		ScrollBarImageTransparency = 0.3,
+		Parent = panel,
+	})
+	Draw.ApplyListLayout(listFrame, 6, 'Vertical')
+	self._listFrame = listFrame
+
+	self._emptyLabel = Create('TextLabel', {
+		Name = 'EmptyLabel',
+		Text = 'Belum ada notifikasi.',
+		Size = UDim2.new(1, 0, 0, 26),
+		BackgroundTransparency = 1,
+		Font = Enum.Font.GothamMedium,
+		TextSize = 12,
+		Visible = false,
+		Parent = panel,
+	})
+
+	self._historyChangedConn = Notification.HistoryChanged:Connect(function()
+		self:_refresh()
+	end)
+
+	self:_refresh()
+
+	panel.BackgroundTransparency = 1
+	Tween.Quick(panel, { BackgroundTransparency = 0 }, ANIM_DURATION)
+end
+
+function NotificationHistory:_clearRows()
+	for _, row in self._rows do
+		row.ThemeConn:Disconnect()
+		row.Instance:Destroy()
+	end
+	table.clear(self._rows)
+end
+
+function NotificationHistory:_refresh()
+	self:_clearRows()
+
+	local history = Notification.GetHistory()
+	self._emptyLabel.Visible = #history == 0
+	self._emptyLabel.TextColor3 = ThemeEngine.Current.TextDim
+
+	for i = #history, 1, -1 do
+		self:_createRow(history[i])
+	end
+end
+
+function NotificationHistory:_createRow(entry)
+	local row = Create('Frame', {
+		Name = 'Row',
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BorderSizePixel = 0,
+		Parent = self._listFrame,
+	})
+	Draw.ApplyCorner(row, 6)
+	Draw.ApplyPadding(row, 8)
+	Draw.ApplyListLayout(row, 2, 'Vertical')
+
+	local accentColor = Notification.TypeColors[entry.Type]
+
+	local titleRow = Create('Frame', {
+		Name = 'TitleRow',
+		Size = UDim2.new(1, 0, 0, 16),
+		BackgroundTransparency = 1,
+		Parent = row,
+	})
+
+	local titleLabel = Create('TextLabel', {
+		Name = 'TitleLabel',
+		Text = entry.Title,
+		Size = UDim2.new(1, -56, 1, 0),
+		BackgroundTransparency = 1,
+		Font = Enum.Font.GothamBold,
+		TextSize = 13,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		Parent = titleRow,
+	})
+
+	local timeLabel = Create('TextLabel', {
+		Name = 'TimeLabel',
+		Text = formatRelativeTime(entry.Timestamp),
+		Size = UDim2.new(0, 56, 1, 0),
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, 0, 0, 0),
+		BackgroundTransparency = 1,
+		Font = Enum.Font.Gotham,
+		TextSize = 10,
+		TextXAlignment = Enum.TextXAlignment.Right,
+		Parent = titleRow,
+	})
+
+	local messageLabel = nil
+	if entry.Message and entry.Message ~= '' then
+		messageLabel = Create('TextLabel', {
+			Name = 'MessageLabel',
+			Text = entry.Message,
+			Size = UDim2.new(1, 0, 0, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+			BackgroundTransparency = 1,
+			Font = Enum.Font.Gotham,
+			TextSize = 12,
+			TextWrapped = true,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			Parent = row,
+		})
+	end
+
+	local function refreshColors()
+		row.BackgroundColor3 = accentColor or ThemeEngine.Current.Accent
+		row.BackgroundTransparency = 0.9
+		titleLabel.TextColor3 = ThemeEngine.Current.Text
+		timeLabel.TextColor3 = ThemeEngine.Current.TextDim
+		if messageLabel then
+			messageLabel.TextColor3 = ThemeEngine.Current.TextDim
+		end
+	end
+	refreshColors()
+
+	local themeConn = ThemeEngine.Changed:Connect(refreshColors)
+
+	table.insert(self._rows, { Instance = row, ThemeConn = themeConn })
+end
+
+function NotificationHistory:Destroy()
+	self:Hide()
+end
+
+return NotificationHistory
 end
 
 Modules["Extras/Watermark"] = function(...)
@@ -4866,6 +5734,8 @@ local Icons = Import("Assets/Icons")
 local Watermark = Import("Extras/Watermark")
 local ConfigManager = Import("Extras/ConfigManager")
 local KeybindManager = Import("Extras/KeybindManager")
+local CommandPalette = Import("Extras/CommandPalette")
+local NotificationHistory = Import("Extras/NotificationHistory")
 
 local NeroUI = {}
 
@@ -4898,7 +5768,22 @@ function NeroUI._bindDependency(component, dependsOn)
     table.insert(component._connections, connection)
 end
 
-local function attachComponentHelpers(container)
+local function attachComponentHelpers(container, windowSelf, tabRef, tabTitle, scrollFrameRef)
+	local function registerPaletteEntry(component, props)
+		if not (windowSelf and windowSelf._commandPalette) then return end
+
+		local label = props.Title or props.Text
+		if type(label) ~= "string" or label == "" then return end
+
+		windowSelf._commandPalette:RegisterEntry({
+			Label = label,
+			TabTitle = tabTitle or "Tab",
+			Component = component,
+			Tab = tabRef,
+			ScrollFrame = scrollFrameRef,
+		})
+	end
+
 	local function make(componentClass)
     return function(_, props)
         props = props or {}
@@ -4909,6 +5794,8 @@ local function attachComponentHelpers(container)
         if props.DependsOn then
             NeroUI._bindDependency(component, props.DependsOn)
         end
+
+        registerPaletteEntry(component, props)
 
         return component
     end
@@ -4938,7 +5825,8 @@ end
 
 		local section = Section.new(props)
 		container:AddComponent(section)
-		attachComponentHelpers(section)
+		registerPaletteEntry(section, props)
+		attachComponentHelpers(section, windowSelf, tabRef, tabTitle, scrollFrameRef)
 		return section
 	end
 
@@ -5026,6 +5914,10 @@ function NeroUI.new(props)
 	self._activeTab = nil
 	self._themeConnections = {}
 	self._reopenKeybind = props.Keybind
+
+	if props.CommandPalette ~= false then
+		self._commandPalette = CommandPalette.new(self)
+	end
 
 	if props.Keybind then
 		_reopenKeybindCounter += 1
@@ -5161,6 +6053,105 @@ function NeroUI.new(props)
 		self._minimizeInput = minimizeInput
 	end
 
+	local TITLEBAR_ICON_WIDTH = 28
+	local TITLEBAR_ICON_GAP = 6
+
+	-- Slot buat tombol titlebar "ekstra" (search palette, bell) di sebelah kiri
+	-- Close/Minimize, biar posisinya konsisten ga peduli kombinasi mana yang aktif.
+	local extraButtonBase = -8 - TITLEBAR_ICON_WIDTH - TITLEBAR_ICON_GAP
+	if props.Minimize then
+		extraButtonBase -= (TITLEBAR_ICON_WIDTH + TITLEBAR_ICON_GAP)
+	end
+	local extraButtonSlot = 0
+	local function nextExtraButtonOffset()
+		local offset = extraButtonBase - extraButtonSlot * (TITLEBAR_ICON_WIDTH + TITLEBAR_ICON_GAP)
+		extraButtonSlot += 1
+		return offset
+	end
+
+	if self._commandPalette then
+		local paletteButton = Create("TextButton", {
+			Name = "CommandPaletteButton",
+			Size = UDim2.new(0, TITLEBAR_ICON_WIDTH, 0, 24),
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, nextExtraButtonOffset(), 0.5, 0),
+			BackgroundTransparency = 1,
+			Text = "",
+			Parent = titlebar,
+		})
+		local paletteIcon = Icons.CreateImage("search", {
+			Name = "Icon",
+			Size = UDim2.new(0, 14, 0, 14),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(0.5, 0, 0.5, 0),
+			ImageColor3 = ThemeEngine.Current.TextDim,
+			Parent = paletteButton,
+		})
+		table.insert(self._themeConnections, ThemeEngine.Changed:Connect(function()
+			paletteIcon.ImageColor3 = ThemeEngine.Current.TextDim
+		end))
+
+		local paletteInput = InputHandler.new(paletteButton)
+		paletteInput.PressEnd:Connect(function(wasClick)
+			if wasClick then
+				self._commandPalette:Toggle()
+			end
+		end)
+		self._paletteInput = paletteInput
+	end
+
+	if props.NotificationHistory ~= false then
+		local bellButton = Create("TextButton", {
+			Name = "NotificationHistoryButton",
+			Size = UDim2.new(0, TITLEBAR_ICON_WIDTH, 0, 24),
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, nextExtraButtonOffset(), 0.5, 0),
+			BackgroundTransparency = 1,
+			Text = "",
+			Parent = titlebar,
+		})
+		local bellIcon = Icons.CreateImage("bell", {
+			Name = "Icon",
+			Size = UDim2.new(0, 14, 0, 14),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(0.5, 0, 0.5, 0),
+			ImageColor3 = ThemeEngine.Current.TextDim,
+			Parent = bellButton,
+		})
+		local unreadBadge = Create("Frame", {
+			Name = "UnreadBadge",
+			Size = UDim2.new(0, 6, 0, 6),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(1, -4, 0, 4),
+			BackgroundColor3 = Color3.fromRGB(224, 90, 90),
+			BorderSizePixel = 0,
+			Visible = false,
+			Parent = bellButton,
+		})
+		Draw.ApplyCorner(unreadBadge, 3)
+
+		table.insert(self._themeConnections, ThemeEngine.Changed:Connect(function()
+			bellIcon.ImageColor3 = ThemeEngine.Current.TextDim
+		end))
+
+		self._notificationHistory = NotificationHistory.new(self, bellButton)
+
+		local function refreshUnreadBadge()
+			unreadBadge.Visible = self._notificationHistory:HasUnread()
+		end
+
+		self._notificationHistoryChangedConn = Notification.HistoryChanged:Connect(refreshUnreadBadge)
+
+		local bellInput = InputHandler.new(bellButton)
+		bellInput.PressEnd:Connect(function(wasClick)
+			if wasClick then
+				self._notificationHistory:Toggle()
+				refreshUnreadBadge()
+			end
+		end)
+		self._bellInput = bellInput
+	end
+
 	local titlebarInput = InputHandler.new(titlebar)
 	titlebarInput:EnableDrag(root)
 	self._titlebarInput = titlebarInput
@@ -5198,13 +6189,15 @@ function Window:AddTab(props)
 	end
 	props = props or {}
 
+	local tabTitle = props.Title or "Tab"
+
 	local tab = Tab.new({ Parent = self._body, Visible = false })
 	local scroll = ScrollFrame.new({ Parent = tab:GetContentFrame() })
 	tab:AddComponent(scroll)
 
-	attachComponentHelpers(scroll)
+	attachComponentHelpers(scroll, self, tab, tabTitle, scroll)
 
-	local tabButtonHandle = createTabButton(self._sidebar, props.Title or "Tab")
+	local tabButtonHandle = createTabButton(self._sidebar, tabTitle)
 	tabButtonHandle.Input.PressEnd:Connect(function(wasClick)
 		if wasClick then
 			self:_setActiveTab(tab)
@@ -5232,6 +6225,21 @@ function Window:_setActiveTab(targetTab)
 		self._tabButtonHandles[index].SetActive(isTarget)
 	end
 	self._activeTab = targetTab
+end
+function Window:Notify(props)
+	return Notification.Show(props)
+end
+
+function Window:ToggleCommandPalette()
+	if self._commandPalette then
+		self._commandPalette:Toggle()
+	end
+end
+
+function Window:ToggleNotificationHistory()
+	if self._notificationHistory then
+		self._notificationHistory:Toggle()
+	end
 end
 
 function Window:SetTheme(mode)
@@ -5281,6 +6289,21 @@ end
 function Window:Destroy()
 	if self._reopenActionName then
 		KeybindManager.Unregister(self._reopenActionName)
+	end
+	if self._commandPalette then
+		self._commandPalette:Destroy()
+	end
+	if self._paletteInput then
+		self._paletteInput:Destroy()
+	end
+	if self._notificationHistory then
+		self._notificationHistory:Destroy()
+	end
+	if self._notificationHistoryChangedConn then
+		self._notificationHistoryChangedConn:Disconnect()
+	end
+	if self._bellInput then
+		self._bellInput:Destroy()
 	end
 	if self._titlebarInput then
 		self._titlebarInput:Destroy()

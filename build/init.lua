@@ -51,6 +51,8 @@ local Icons = Import("Assets/Icons")
 local Watermark = Import("Extras/Watermark")
 local ConfigManager = Import("Extras/ConfigManager")
 local KeybindManager = Import("Extras/KeybindManager")
+local CommandPalette = Import("Extras/CommandPalette")
+local NotificationHistory = Import("Extras/NotificationHistory")
 
 local NeroUI = {}
 
@@ -83,7 +85,22 @@ function NeroUI._bindDependency(component, dependsOn)
     table.insert(component._connections, connection)
 end
 
-local function attachComponentHelpers(container)
+local function attachComponentHelpers(container, windowSelf, tabRef, tabTitle, scrollFrameRef)
+	local function registerPaletteEntry(component, props)
+		if not (windowSelf and windowSelf._commandPalette) then return end
+
+		local label = props.Title or props.Text
+		if type(label) ~= "string" or label == "" then return end
+
+		windowSelf._commandPalette:RegisterEntry({
+			Label = label,
+			TabTitle = tabTitle or "Tab",
+			Component = component,
+			Tab = tabRef,
+			ScrollFrame = scrollFrameRef,
+		})
+	end
+
 	local function make(componentClass)
     return function(_, props)
         props = props or {}
@@ -94,6 +111,8 @@ local function attachComponentHelpers(container)
         if props.DependsOn then
             NeroUI._bindDependency(component, props.DependsOn)
         end
+
+        registerPaletteEntry(component, props)
 
         return component
     end
@@ -123,7 +142,8 @@ end
 
 		local section = Section.new(props)
 		container:AddComponent(section)
-		attachComponentHelpers(section)
+		registerPaletteEntry(section, props)
+		attachComponentHelpers(section, windowSelf, tabRef, tabTitle, scrollFrameRef)
 		return section
 	end
 
@@ -211,6 +231,10 @@ function NeroUI.new(props)
 	self._activeTab = nil
 	self._themeConnections = {}
 	self._reopenKeybind = props.Keybind
+
+	if props.CommandPalette ~= false then
+		self._commandPalette = CommandPalette.new(self)
+	end
 
 	if props.Keybind then
 		_reopenKeybindCounter += 1
@@ -346,6 +370,105 @@ function NeroUI.new(props)
 		self._minimizeInput = minimizeInput
 	end
 
+	local TITLEBAR_ICON_WIDTH = 28
+	local TITLEBAR_ICON_GAP = 6
+
+	-- Slot buat tombol titlebar "ekstra" (search palette, bell) di sebelah kiri
+	-- Close/Minimize, biar posisinya konsisten ga peduli kombinasi mana yang aktif.
+	local extraButtonBase = -8 - TITLEBAR_ICON_WIDTH - TITLEBAR_ICON_GAP
+	if props.Minimize then
+		extraButtonBase -= (TITLEBAR_ICON_WIDTH + TITLEBAR_ICON_GAP)
+	end
+	local extraButtonSlot = 0
+	local function nextExtraButtonOffset()
+		local offset = extraButtonBase - extraButtonSlot * (TITLEBAR_ICON_WIDTH + TITLEBAR_ICON_GAP)
+		extraButtonSlot += 1
+		return offset
+	end
+
+	if self._commandPalette then
+		local paletteButton = Create("TextButton", {
+			Name = "CommandPaletteButton",
+			Size = UDim2.new(0, TITLEBAR_ICON_WIDTH, 0, 24),
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, nextExtraButtonOffset(), 0.5, 0),
+			BackgroundTransparency = 1,
+			Text = "",
+			Parent = titlebar,
+		})
+		local paletteIcon = Icons.CreateImage("search", {
+			Name = "Icon",
+			Size = UDim2.new(0, 14, 0, 14),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(0.5, 0, 0.5, 0),
+			ImageColor3 = ThemeEngine.Current.TextDim,
+			Parent = paletteButton,
+		})
+		table.insert(self._themeConnections, ThemeEngine.Changed:Connect(function()
+			paletteIcon.ImageColor3 = ThemeEngine.Current.TextDim
+		end))
+
+		local paletteInput = InputHandler.new(paletteButton)
+		paletteInput.PressEnd:Connect(function(wasClick)
+			if wasClick then
+				self._commandPalette:Toggle()
+			end
+		end)
+		self._paletteInput = paletteInput
+	end
+
+	if props.NotificationHistory ~= false then
+		local bellButton = Create("TextButton", {
+			Name = "NotificationHistoryButton",
+			Size = UDim2.new(0, TITLEBAR_ICON_WIDTH, 0, 24),
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, nextExtraButtonOffset(), 0.5, 0),
+			BackgroundTransparency = 1,
+			Text = "",
+			Parent = titlebar,
+		})
+		local bellIcon = Icons.CreateImage("bell", {
+			Name = "Icon",
+			Size = UDim2.new(0, 14, 0, 14),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(0.5, 0, 0.5, 0),
+			ImageColor3 = ThemeEngine.Current.TextDim,
+			Parent = bellButton,
+		})
+		local unreadBadge = Create("Frame", {
+			Name = "UnreadBadge",
+			Size = UDim2.new(0, 6, 0, 6),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(1, -4, 0, 4),
+			BackgroundColor3 = Color3.fromRGB(224, 90, 90),
+			BorderSizePixel = 0,
+			Visible = false,
+			Parent = bellButton,
+		})
+		Draw.ApplyCorner(unreadBadge, 3)
+
+		table.insert(self._themeConnections, ThemeEngine.Changed:Connect(function()
+			bellIcon.ImageColor3 = ThemeEngine.Current.TextDim
+		end))
+
+		self._notificationHistory = NotificationHistory.new(self, bellButton)
+
+		local function refreshUnreadBadge()
+			unreadBadge.Visible = self._notificationHistory:HasUnread()
+		end
+
+		self._notificationHistoryChangedConn = Notification.HistoryChanged:Connect(refreshUnreadBadge)
+
+		local bellInput = InputHandler.new(bellButton)
+		bellInput.PressEnd:Connect(function(wasClick)
+			if wasClick then
+				self._notificationHistory:Toggle()
+				refreshUnreadBadge()
+			end
+		end)
+		self._bellInput = bellInput
+	end
+
 	local titlebarInput = InputHandler.new(titlebar)
 	titlebarInput:EnableDrag(root)
 	self._titlebarInput = titlebarInput
@@ -383,13 +506,15 @@ function Window:AddTab(props)
 	end
 	props = props or {}
 
+	local tabTitle = props.Title or "Tab"
+
 	local tab = Tab.new({ Parent = self._body, Visible = false })
 	local scroll = ScrollFrame.new({ Parent = tab:GetContentFrame() })
 	tab:AddComponent(scroll)
 
-	attachComponentHelpers(scroll)
+	attachComponentHelpers(scroll, self, tab, tabTitle, scroll)
 
-	local tabButtonHandle = createTabButton(self._sidebar, props.Title or "Tab")
+	local tabButtonHandle = createTabButton(self._sidebar, tabTitle)
 	tabButtonHandle.Input.PressEnd:Connect(function(wasClick)
 		if wasClick then
 			self:_setActiveTab(tab)
@@ -417,6 +542,21 @@ function Window:_setActiveTab(targetTab)
 		self._tabButtonHandles[index].SetActive(isTarget)
 	end
 	self._activeTab = targetTab
+end
+function Window:Notify(props)
+	return Notification.Show(props)
+end
+
+function Window:ToggleCommandPalette()
+	if self._commandPalette then
+		self._commandPalette:Toggle()
+	end
+end
+
+function Window:ToggleNotificationHistory()
+	if self._notificationHistory then
+		self._notificationHistory:Toggle()
+	end
 end
 
 function Window:SetTheme(mode)
@@ -466,6 +606,21 @@ end
 function Window:Destroy()
 	if self._reopenActionName then
 		KeybindManager.Unregister(self._reopenActionName)
+	end
+	if self._commandPalette then
+		self._commandPalette:Destroy()
+	end
+	if self._paletteInput then
+		self._paletteInput:Destroy()
+	end
+	if self._notificationHistory then
+		self._notificationHistory:Destroy()
+	end
+	if self._notificationHistoryChangedConn then
+		self._notificationHistoryChangedConn:Disconnect()
+	end
+	if self._bellInput then
+		self._bellInput:Destroy()
 	end
 	if self._titlebarInput then
 		self._titlebarInput:Destroy()
