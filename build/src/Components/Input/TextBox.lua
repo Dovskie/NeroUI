@@ -45,6 +45,7 @@ function TextBox.new(props)
         Size = props.BoxSize or BOX_SIZE,
         AnchorPoint = Vector2.new(1, 0.5),
         Position = UDim2.new(1, 0, 0.5, 0),
+        ClipsDescendants = true,
         BorderSizePixel = 0,
         Parent = inst,
     })

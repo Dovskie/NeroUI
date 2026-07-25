@@ -14,6 +14,8 @@ Button.__index = Button
 local DEFAULT_SIZE = UDim2.new(0, 140, 0, 36)
 local CORNER_RADIUS = 6
 local COLOR_TWEEN_DURATION = 0.15
+local ICON_SIZE = 16
+local ICON_TEXT_GAP = 6
 
 function Button.new(props)
     props = props or {}
@@ -23,6 +25,7 @@ function Button.new(props)
     local hoverColor = props.HoverColor or (hasCustomColor and baseColor or ThemeEngine.Current.AccentHover)
     local pressedColor = props.PressedColor or (hasCustomColor and baseColor or ThemeEngine.Current.AccentPressed)
     local autoWidth = props.Size == nil
+    local hasIcon = props.Icon ~= nil
 
     local inst = Create('TextButton', {
         Name = 'NeroButton',
@@ -124,8 +127,6 @@ function Button.new(props)
     end)
 
     self:OnThemeChanged(function(theme)
-        -- Kalo Color di-set manual (misal Danger), warnanya independen dari tema,
-        -- jadi ga usah di-refresh pas tema ganti.
         if not self._hasCustomColor then
             self._color = theme.Accent
             self._hoverColor = theme.AccentHover
@@ -145,7 +146,6 @@ function Button.new(props)
     return self
 end
 
--- Ganti warna base/hover/pressed button setelah dibuat (misal toggle Danger state).
 function Button:SetColors(color, hoverColor, pressedColor)
     self._hasCustomColor = color ~= nil
     self._color = color or ThemeEngine.Current.Accent

@@ -142,6 +142,11 @@ end
 
 		local section = Section.new(props)
 		container:AddComponent(section)
+
+		if props.DependsOn then
+			NeroUI._bindDependency(section, props.DependsOn)
+		end
+
 		registerPaletteEntry(section, props)
 		attachComponentHelpers(section, windowSelf, tabRef, tabTitle, scrollFrameRef)
 		return section
@@ -372,9 +377,6 @@ function NeroUI.new(props)
 
 	local TITLEBAR_ICON_WIDTH = 28
 	local TITLEBAR_ICON_GAP = 6
-
-	-- Slot buat tombol titlebar "ekstra" (search palette, bell) di sebelah kiri
-	-- Close/Minimize, biar posisinya konsisten ga peduli kombinasi mana yang aktif.
 	local extraButtonBase = -8 - TITLEBAR_ICON_WIDTH - TITLEBAR_ICON_GAP
 	if props.Minimize then
 		extraButtonBase -= (TITLEBAR_ICON_WIDTH + TITLEBAR_ICON_GAP)
