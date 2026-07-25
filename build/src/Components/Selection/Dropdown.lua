@@ -211,6 +211,7 @@ function Dropdown:_ensurePopup()
 
 		self._searchBox = searchBox
 	end
+
 	local optionsList = Create("ScrollingFrame", {
 		Name = "OptionsList",
 		Position = UDim2.new(0, 0, 0, searchHeight),
@@ -334,6 +335,7 @@ function Dropdown:_positionPopup()
 	local buttonSize = self._selectButton.AbsoluteSize
 	local popupSize = self._popup.AbsoluteSize
 	local viewport = Workspace.CurrentCamera.ViewportSize
+
 	local x = math.clamp(buttonPos.X, 0, math.max(0, viewport.X - popupSize.X))
 	local y = buttonPos.Y + buttonSize.Y + 4
 	if y + popupSize.Y > viewport.Y then
@@ -359,6 +361,10 @@ function Dropdown:Open()
 		self._searchBox.Text = ""
 		self:_filterOptions("")
 	end
+
+	self._followConnection = self._selectButton:GetPropertyChangedSignal("AbsolutePosition"):Connect(function()
+		self:_positionPopup()
+	end)
 
 	self._outsideClickConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		if gameProcessed then return end
@@ -387,6 +393,11 @@ function Dropdown:Close()
 	if self._outsideClickConnection then
 		self._outsideClickConnection:Disconnect()
 		self._outsideClickConnection = nil
+	end
+
+	if self._followConnection then
+		self._followConnection:Disconnect()
+		self._followConnection = nil
 	end
 end
 
@@ -518,6 +529,11 @@ function Dropdown:Destroy()
 	if self._listLayoutConnection then
 		self._listLayoutConnection:Disconnect()
 		self._listLayoutConnection = nil
+	end
+
+	if self._followConnection then
+		self._followConnection:Disconnect()
+		self._followConnection = nil
 	end
 
 	if self._popup then

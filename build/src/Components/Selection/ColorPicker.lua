@@ -294,6 +294,7 @@ function ColorPicker:_positionPopup()
 	local viewport = Workspace.CurrentCamera.ViewportSize
 
 	local x = math.clamp(pos.X + size.X - POPUP_WIDTH, 0, math.max(0, viewport.X - popupSize.X))
+
 	local y = pos.Y + size.Y + 4
 	if y + popupSize.Y > viewport.Y then
 		local upwardY = pos.Y - popupSize.Y - 4
@@ -321,6 +322,9 @@ function ColorPicker:Open()
 	self:_positionPopup()
 	self._popup.Visible = true
 	self._open = true
+	self._followConnection = self._swatch:GetPropertyChangedSignal("AbsolutePosition"):Connect(function()
+		self:_positionPopup()
+	end)
 
 	self._outsideClickConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		if gameProcessed then return end
@@ -346,6 +350,11 @@ function ColorPicker:Close()
     if self._outsideClickConnection then
         self._outsideClickConnection:Disconnect()
         self._outsideClickConnection = nil
+    end
+
+    if self._followConnection then
+        self._followConnection:Disconnect()
+        self._followConnection = nil
     end
 
 	self._svDragging = false
@@ -379,6 +388,11 @@ end
 
 function ColorPicker:Destroy()
 	self:Close()
+
+	if self._followConnection then
+		self._followConnection:Disconnect()
+		self._followConnection = nil
+	end
 
 	if self._input then
 		self._input:Destroy()
