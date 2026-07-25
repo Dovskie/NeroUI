@@ -1,5 +1,6 @@
 local UserInputService = game:GetService("UserInputService")
 local GuiService = game:GetService("GuiService")
+local Workspace = game:GetService("Workspace")
 
 local Import = ...
 local Create = Import("Core/Create")
@@ -289,7 +290,17 @@ end
 function ColorPicker:_positionPopup()
 	local pos = self._swatch.AbsolutePosition
 	local size = self._swatch.AbsoluteSize
-	self._popup.Position = UDim2.new(0, pos.X + size.X - POPUP_WIDTH, 0, pos.Y + size.Y + 4)
+	local popupSize = self._popup.AbsoluteSize
+	local viewport = Workspace.CurrentCamera.ViewportSize
+
+	local x = math.clamp(pos.X + size.X - POPUP_WIDTH, 0, math.max(0, viewport.X - popupSize.X))
+	local y = pos.Y + size.Y + 4
+	if y + popupSize.Y > viewport.Y then
+		local upwardY = pos.Y - popupSize.Y - 4
+		y = upwardY >= 0 and upwardY or math.max(0, viewport.Y - popupSize.Y)
+	end
+
+	self._popup.Position = UDim2.new(0, x, 0, y)
 end
 
 function ColorPicker:_isPointInside(guiObject, point)

@@ -2758,6 +2758,7 @@ end
 Modules["Components/Selection/ColorPicker"] = function(...)
 local UserInputService = game:GetService("UserInputService")
 local GuiService = game:GetService("GuiService")
+local Workspace = game:GetService("Workspace")
 
 local Import = ...
 local Create = Import("Core/Create")
@@ -3047,7 +3048,17 @@ end
 function ColorPicker:_positionPopup()
 	local pos = self._swatch.AbsolutePosition
 	local size = self._swatch.AbsoluteSize
-	self._popup.Position = UDim2.new(0, pos.X + size.X - POPUP_WIDTH, 0, pos.Y + size.Y + 4)
+	local popupSize = self._popup.AbsoluteSize
+	local viewport = Workspace.CurrentCamera.ViewportSize
+
+	local x = math.clamp(pos.X + size.X - POPUP_WIDTH, 0, math.max(0, viewport.X - popupSize.X))
+	local y = pos.Y + size.Y + 4
+	if y + popupSize.Y > viewport.Y then
+		local upwardY = pos.Y - popupSize.Y - 4
+		y = upwardY >= 0 and upwardY or math.max(0, viewport.Y - popupSize.Y)
+	end
+
+	self._popup.Position = UDim2.new(0, x, 0, y)
 end
 
 function ColorPicker:_isPointInside(guiObject, point)
@@ -3154,6 +3165,7 @@ end
 
 Modules["Components/Selection/Dropdown"] = function(...)
 local UserInputService = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
 
 local Import = ...
 local Create = Import("Core/Create")
@@ -3365,7 +3377,6 @@ function Dropdown:_ensurePopup()
 
 		self._searchBox = searchBox
 	end
-
 	local optionsList = Create("ScrollingFrame", {
 		Name = "OptionsList",
 		Position = UDim2.new(0, 0, 0, searchHeight),
@@ -3487,8 +3498,16 @@ end
 function Dropdown:_positionPopup()
 	local buttonPos = self._selectButton.AbsolutePosition
 	local buttonSize = self._selectButton.AbsoluteSize
+	local popupSize = self._popup.AbsoluteSize
+	local viewport = Workspace.CurrentCamera.ViewportSize
+	local x = math.clamp(buttonPos.X, 0, math.max(0, viewport.X - popupSize.X))
+	local y = buttonPos.Y + buttonSize.Y + 4
+	if y + popupSize.Y > viewport.Y then
+		local upwardY = buttonPos.Y - popupSize.Y - 4
+		y = upwardY >= 0 and upwardY or math.max(0, viewport.Y - popupSize.Y)
+	end
 
-	self._popup.Position = UDim2.new(0, buttonPos.X, 0, buttonPos.Y + buttonSize.Y + 4)
+	self._popup.Position = UDim2.new(0, x, 0, y)
 end
 
 function Dropdown:Open()

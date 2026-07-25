@@ -1,4 +1,5 @@
 local UserInputService = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
 
 local Import = ...
 local Create = Import("Core/Create")
@@ -210,7 +211,6 @@ function Dropdown:_ensurePopup()
 
 		self._searchBox = searchBox
 	end
-
 	local optionsList = Create("ScrollingFrame", {
 		Name = "OptionsList",
 		Position = UDim2.new(0, 0, 0, searchHeight),
@@ -332,8 +332,16 @@ end
 function Dropdown:_positionPopup()
 	local buttonPos = self._selectButton.AbsolutePosition
 	local buttonSize = self._selectButton.AbsoluteSize
+	local popupSize = self._popup.AbsoluteSize
+	local viewport = Workspace.CurrentCamera.ViewportSize
+	local x = math.clamp(buttonPos.X, 0, math.max(0, viewport.X - popupSize.X))
+	local y = buttonPos.Y + buttonSize.Y + 4
+	if y + popupSize.Y > viewport.Y then
+		local upwardY = buttonPos.Y - popupSize.Y - 4
+		y = upwardY >= 0 and upwardY or math.max(0, viewport.Y - popupSize.Y)
+	end
 
-	self._popup.Position = UDim2.new(0, buttonPos.X, 0, buttonPos.Y + buttonSize.Y + 4)
+	self._popup.Position = UDim2.new(0, x, 0, y)
 end
 
 function Dropdown:Open()
