@@ -7,7 +7,6 @@ local Signal = Import("Core/Signal")
 local InputHandler = Import("Core/InputHandler")
 local ThemeEngine = Import("Theme/ThemeEngine")
 local Icons = Import("Assets/Icons")
-local ScreenManager = Import("Core/ScreenManager")
 local BaseComponent = Import("Components/Base/BaseComponent")
 local Label = Import("Components/Basic/Label")
 
@@ -22,6 +21,9 @@ local POPUP_RADIUS = 6
 local POPUP_MAX_HEIGHT = 200
 local CHECK_SIZE = 14
 local ACTIVE_TRANSPARENCY = 0.85
+local POPUP_ZINDEX = 50
+
+local POPUP_OFFSET_Y = SELECT_BUTTON_SIZE.Y.Offset / 2 + 4
 
 function Dropdown.new(props)
 	props = props or {}
@@ -33,6 +35,7 @@ function Dropdown.new(props)
 		Name = "NeroDropdown",
 		Size = UDim2.new(1, 0, 0, CONTAINER_HEIGHT),
 		BackgroundTransparency = 1,
+		ClipsDescendants = false,
 		Parent = props.Parent
 	})
 
@@ -169,12 +172,15 @@ function Dropdown:_ensurePopup()
 
 	local listHeight = math.min(#self._options * OPTION_HEIGHT, POPUP_MAX_HEIGHT)
 	local popupHeight = listHeight + (self._searchable and SEARCH_HEIGHT or 0)
-
 	local popup = Create("Frame", {
 		Name = "NeroDropdownPopup",
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, 0, 0.5, POPUP_OFFSET_Y),
 		Size = UDim2.new(0, SELECT_BUTTON_SIZE.X.Offset, 0, popupHeight),
 		BorderSizePixel = 0,
+		ZIndex = POPUP_ZINDEX,
 		Visible = false,
+		Parent = self.Instance,
 	})
 	Draw.ApplyCorner(popup, POPUP_RADIUS)
 	Draw.ApplyListLayout(popup, 0, "Vertical")
@@ -293,56 +299,12 @@ function Dropdown:_ensurePopup()
 	end
 
 	self._popup = popup
-
-	-- Cari ScrollingFrame leluhur sekali di sini (bukan tiap Open) karena
-	-- posisi komponen ini di hierarchy nggak berubah-ubah. Kalau ketemu,
-	-- bikin "clip host": Frame transparan dengan ClipsDescendants = true
-	-- yang nanti disamain ukurannya persis sama area visible ScrollingFrame
-	-- itu. Popup di-parent ke situ, bukan langsung ke root, supaya popup
-	-- otomatis kepotong rapi ngikutin batas scroll -- sama kayak konten lain
-	-- yang di-scroll -- bukan meluber keluar panel.
-	self._scrollFrame = self._selectButton:FindFirstAncestorWhichIsA("ScrollingFrame")
-
-	if self._scrollFrame then
-		local clipHost = Create("Frame", {
-			Name = "NeroDropdownClipHost",
-			BackgroundTransparency = 1,
-			BorderSizePixel = 0,
-			ClipsDescendants = true,
-		})
-		popup.Parent = clipHost
-		self._clipHost = clipHost
-	end
-end
-
-function Dropdown:_positionPopup()
-	local buttonPos = self._selectButton.AbsolutePosition
-	local buttonSize = self._selectButton.AbsoluteSize
-
-	if self._clipHost and self._scrollFrame then
-		local sfPos = self._scrollFrame.AbsolutePosition
-		local sfSize = self._scrollFrame.AbsoluteSize
-
-		-- clip host disamain persis dengan area visible ScrollingFrame
-		self._clipHost.Position = UDim2.new(0, sfPos.X, 0, sfPos.Y)
-		self._clipHost.Size = UDim2.new(0, sfSize.X, 0, sfSize.Y)
-
-		-- popup posisinya relatif terhadap clip host (bukan layar), jadi
-		-- dikurangi posisi clip host-nya
-		self._popup.Position = UDim2.new(0, buttonPos.X - sfPos.X, 0, buttonPos.Y - sfPos.Y + buttonSize.Y + 4)
-	else
-		self._popup.Position = UDim2.new(0, buttonPos.X, 0, buttonPos.Y + buttonSize.Y + 4)
-	end
 end
 
 function Dropdown:Open()
 	if self._open then return end
 
 	self:_ensurePopup()
-	local hostFrame = self._clipHost or self._popup
-	hostFrame.Parent = ScreenManager.GetRoot()
-	ScreenManager.BringToFront(hostFrame)
-	self:_positionPopup()
 	self._popup.Visible = true
 	self._open = true
 	self._chevron.Rotation = 180
@@ -351,35 +313,6 @@ function Dropdown:Open()
 		self._searchBox.Text = ""
 		self:_filterOptions("")
 	end
-
-	-- FIX: popup (via clip host) di-parent ke root terpisah (ScreenManager
-	-- root), jadi dia tidak otomatis ikut ketika container ini di-scroll di
-	-- dalam sebuah ScrollingFrame. AbsolutePosition tombol tetap ter-update
-	-- oleh Roblox saat CanvasPosition berubah, jadi kita dengerin itu dan
-	-- reposisi popup + clip host setiap kali berubah supaya popup selalu
-	-- "menempel" ke tombolnya dan kepotong rapi ngikutin batas scroll.
-	-- Baru bener-bener Close() kalau tombolnya udah keluar TOTAL dari area
-	-- scroll (nggak ada overlap sama sekali) -- overflow visualnya sendiri
-	-- udah ditangani oleh clip host di atas.
-	local function trackPosition()
-		if not self._open or not self._popup then return end
-
-		self:_positionPopup()
-
-		if self._scrollFrame then
-			local sfPos = self._scrollFrame.AbsolutePosition
-			local sfSize = self._scrollFrame.AbsoluteSize
-			local btnPos = self._selectButton.AbsolutePosition
-			local btnSize = self._selectButton.AbsoluteSize
-
-			local completelyGone = (btnPos.Y + btnSize.Y <= sfPos.Y) or (btnPos.Y >= sfPos.Y + sfSize.Y)
-			if completelyGone then
-				self:Close()
-			end
-		end
-	end
-
-	self._positionConnection = self._selectButton:GetPropertyChangedSignal("AbsolutePosition"):Connect(trackPosition)
 
 	self._outsideClickConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		if gameProcessed then return end
@@ -408,14 +341,6 @@ function Dropdown:Close()
 	if self._outsideClickConnection then
 		self._outsideClickConnection:Disconnect()
 		self._outsideClickConnection = nil
-	end
-
-	-- FIX: hentikan tracking posisi saat popup ditutup
-	-- (catatan: self._scrollFrame TIDAK direset di sini -- dia dihitung
-	-- sekali di _ensurePopup dan tetap sama selama komponen ini hidup)
-	if self._positionConnection then
-		self._positionConnection:Disconnect()
-		self._positionConnection = nil
 	end
 end
 
@@ -541,11 +466,6 @@ function Dropdown:Destroy()
 	if self._popup then
 		self._popup:Destroy()
 		self._popup = nil
-	end
-
-	if self._clipHost then
-		self._clipHost:Destroy()
-		self._clipHost = nil
 	end
 
 	self.OnValueChanged:Destroy()
