@@ -311,6 +311,37 @@ function ColorPicker:Open()
 	self._popup.Visible = true
 	self._open = true
 
+	-- FIX: popup di-parent ke root terpisah (ScreenManager root), jadi dia
+	-- tidak otomatis ikut ketika container ini di-scroll di dalam sebuah
+	-- ScrollingFrame. AbsolutePosition swatch tetap ter-update oleh Roblox
+	-- saat CanvasPosition berubah, jadi kita dengerin itu dan reposisi popup
+	-- setiap kali berubah supaya popup selalu "menempel" ke swatch-nya.
+	-- Kalau swatch-nya sampai ter-scroll keluar dari viewport ScrollingFrame
+	-- induknya (naik ke atas hierarchy, jadi tetap aman walau nested di
+	-- dalam Section dsb.), popup ditutup otomatis biar ga "ngambang".
+	local scrollFrame = self._swatch:FindFirstAncestorWhichIsA("ScrollingFrame")
+	self._scrollFrame = scrollFrame
+
+	local function trackPosition()
+		if not self._open or not self._popup then return end
+
+		self:_positionPopup()
+
+		if self._scrollFrame then
+			local sfPos = self._scrollFrame.AbsolutePosition
+			local sfSize = self._scrollFrame.AbsoluteSize
+			local swPos = self._swatch.AbsolutePosition
+			local swSize = self._swatch.AbsoluteSize
+
+			local stillVisible = swPos.Y + swSize.Y > sfPos.Y and swPos.Y < sfPos.Y + sfSize.Y
+			if not stillVisible then
+				self:Close()
+			end
+		end
+	end
+
+	self._positionConnection = self._swatch:GetPropertyChangedSignal("AbsolutePosition"):Connect(trackPosition)
+
 	self._outsideClickConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		if gameProcessed then return end
 		if not isPointerInput(input.UserInputType) then return end
@@ -336,6 +367,13 @@ function ColorPicker:Close()
         self._outsideClickConnection:Disconnect()
         self._outsideClickConnection = nil
     end
+
+    -- FIX: hentikan tracking posisi saat popup ditutup
+    if self._positionConnection then
+        self._positionConnection:Disconnect()
+        self._positionConnection = nil
+    end
+    self._scrollFrame = nil
 
 	self._svDragging = false
     self._hueDragging = false

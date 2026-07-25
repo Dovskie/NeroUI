@@ -318,6 +318,37 @@ function Dropdown:Open()
 		self:_filterOptions("")
 	end
 
+	-- FIX: popup di-parent ke root terpisah (ScreenManager root), jadi dia
+	-- tidak otomatis ikut ketika container ini di-scroll di dalam sebuah
+	-- ScrollingFrame. AbsolutePosition tombol tetap ter-update oleh Roblox
+	-- saat CanvasPosition berubah, jadi kita dengerin itu dan reposisi popup
+	-- setiap kali berubah supaya popup selalu "menempel" ke tombolnya.
+	-- Kalau tombolnya sampai ter-scroll keluar dari viewport ScrollingFrame
+	-- induknya (naik ke atas hierarchy, jadi tetap aman walau nested di
+	-- dalam Section dsb.), popup ditutup otomatis biar ga "ngambang".
+	local scrollFrame = self._selectButton:FindFirstAncestorWhichIsA("ScrollingFrame")
+	self._scrollFrame = scrollFrame
+
+	local function trackPosition()
+		if not self._open or not self._popup then return end
+
+		self:_positionPopup()
+
+		if self._scrollFrame then
+			local sfPos = self._scrollFrame.AbsolutePosition
+			local sfSize = self._scrollFrame.AbsoluteSize
+			local btnPos = self._selectButton.AbsolutePosition
+			local btnSize = self._selectButton.AbsoluteSize
+
+			local stillVisible = btnPos.Y + btnSize.Y > sfPos.Y and btnPos.Y < sfPos.Y + sfSize.Y
+			if not stillVisible then
+				self:Close()
+			end
+		end
+	end
+
+	self._positionConnection = self._selectButton:GetPropertyChangedSignal("AbsolutePosition"):Connect(trackPosition)
+
 	self._outsideClickConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		if gameProcessed then return end
 		if input.UserInputType ~= Enum.UserInputType.MouseButton1
@@ -346,6 +377,13 @@ function Dropdown:Close()
 		self._outsideClickConnection:Disconnect()
 		self._outsideClickConnection = nil
 	end
+
+	-- FIX: hentikan tracking posisi saat popup ditutup
+	if self._positionConnection then
+		self._positionConnection:Disconnect()
+		self._positionConnection = nil
+	end
+	self._scrollFrame = nil
 end
 
 function Dropdown:Toggle()
