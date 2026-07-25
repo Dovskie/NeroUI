@@ -22,10 +22,13 @@ function Button.new(props)
     local baseColor = props.Color or ThemeEngine.Current.Accent
     local hoverColor = props.HoverColor or (hasCustomColor and baseColor or ThemeEngine.Current.AccentHover)
     local pressedColor = props.PressedColor or (hasCustomColor and baseColor or ThemeEngine.Current.AccentPressed)
+    local autoWidth = props.Size == nil
 
     local inst = Create('TextButton', {
         Name = 'NeroButton',
-        Size = props.Size or DEFAULT_SIZE,
+        Size = props.Size or UDim2.new(0, 0, 0, DEFAULT_SIZE.Y.Offset),
+        AutomaticSize = autoWidth and Enum.AutomaticSize.X or Enum.AutomaticSize.None,
+        ClipsDescendants = true,
         BackgroundColor3 = baseColor,
         AutoButtonColor = false,
         Text = '',
@@ -35,6 +38,15 @@ function Button.new(props)
         BorderSizePixel = 0,
         Parent = props.Parent
     })
+
+    if autoWidth then
+        Draw.ApplyPadding(inst, {left = 12, right = 12})
+        Create('UISizeConstraint', {
+            MinSize = Vector2.new(DEFAULT_SIZE.X.Offset, 0),
+            Parent = inst,
+        })
+    end
+    
     Draw.ApplyCorner(inst, CORNER_RADIUS)
 
     Create('UIListLayout', {
