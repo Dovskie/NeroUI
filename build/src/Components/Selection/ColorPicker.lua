@@ -1,6 +1,5 @@
 local UserInputService = game:GetService("UserInputService")
 local GuiService = game:GetService("GuiService")
-local Workspace = game:GetService("Workspace")
 
 local Import = ...
 local Create = Import("Core/Create")
@@ -290,18 +289,7 @@ end
 function ColorPicker:_positionPopup()
 	local pos = self._swatch.AbsolutePosition
 	local size = self._swatch.AbsoluteSize
-	local popupSize = self._popup.AbsoluteSize
-	local viewport = Workspace.CurrentCamera.ViewportSize
-
-	local x = math.clamp(pos.X + size.X - POPUP_WIDTH, 0, math.max(0, viewport.X - popupSize.X))
-
-	local y = pos.Y + size.Y + 4
-	if y + popupSize.Y > viewport.Y then
-		local upwardY = pos.Y - popupSize.Y - 4
-		y = upwardY >= 0 and upwardY or math.max(0, viewport.Y - popupSize.Y)
-	end
-
-	self._popup.Position = UDim2.new(0, x, 0, y)
+	self._popup.Position = UDim2.new(0, pos.X + size.X - POPUP_WIDTH, 0, pos.Y + size.Y + 4)
 end
 
 function ColorPicker:_isPointInside(guiObject, point)
@@ -322,9 +310,6 @@ function ColorPicker:Open()
 	self:_positionPopup()
 	self._popup.Visible = true
 	self._open = true
-	self._followConnection = self._swatch:GetPropertyChangedSignal("AbsolutePosition"):Connect(function()
-		self:_positionPopup()
-	end)
 
 	self._outsideClickConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		if gameProcessed then return end
@@ -352,11 +337,6 @@ function ColorPicker:Close()
         self._outsideClickConnection = nil
     end
 
-    if self._followConnection then
-        self._followConnection:Disconnect()
-        self._followConnection = nil
-    end
-
 	self._svDragging = false
     self._hueDragging = false
     if self._svMoveConn then self._svMoveConn:Disconnect() self._svMoveConn = nil end
@@ -374,8 +354,6 @@ function ColorPicker:Toggle()
 end
 
 function ColorPicker:SetValue(color)
-	if color == self:_currentColor() then return end
-
 	local h, s, v = color:ToHSV()
 	self._hue, self._sat, self._val = h, s, v
 	self:_updateCursorPositions()
@@ -388,11 +366,6 @@ end
 
 function ColorPicker:Destroy()
 	self:Close()
-
-	if self._followConnection then
-		self._followConnection:Disconnect()
-		self._followConnection = nil
-	end
 
 	if self._input then
 		self._input:Destroy()

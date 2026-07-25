@@ -681,7 +681,6 @@ function DataTable:_buildHeader()
             BackgroundTransparency = 1,
             AutoButtonColor = false,
             Text = '',
-            ClipsDescendants = true,
             Parent = header,
         })
         xOffset += col._resolvedWidth
@@ -763,7 +762,6 @@ function DataTable:_render()
                 TextXAlignment = col.Align or Enum.TextXAlignment.Left,
                 TextSize = 13,
                 Font = Enum.Font.GothamMedium,
-                ClipsDescendants = true,
                 Parent = rowFrame,
             })
             xOffset += col._resolvedWidth
@@ -794,10 +792,6 @@ function DataTable:Sort(key, ascending)
 
     table.sort(self._data, function(a, b)
         local av, bv = a[key], b[key]
-        if av == nil and bv == nil then return false end
-        if av == nil then return false end
-        if bv == nil then return true end
-
         if av == bv then return false end
         if ascending then return av < bv end
         return av > bv
@@ -1606,10 +1600,7 @@ function ProgressBar:GetValue()
 end
 
 function ProgressBar:SetIndeterminate(isIndeterminate)
-	if self._indeterminate == isIndeterminate then return end
 	self._indeterminate = isIndeterminate
-	self._indeterminateGeneration = (self._indeterminateGeneration or 0) + 1
-	local myGeneration = self._indeterminateGeneration
 
 	if self._indeterminateTween then
 		self._indeterminateTween:Cancel()
@@ -1624,12 +1615,10 @@ function ProgressBar:SetIndeterminate(isIndeterminate)
 		self._fill.Size = UDim2.new(0.3, 0, 1, 0)
 
 		local function loop()
-			if myGeneration ~= self._indeterminateGeneration then return end
-
 			self._fill.Position = UDim2.new(0, 0, 0, 0)
 			self._indeterminateTween = Tween.new(self._fill, { Position = UDim2.new(0.7, 0, 0, 0) }, INDETERMINATE_DURATION, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
 			self._indeterminateTween.Completed:Connect(function()
-				if myGeneration == self._indeterminateGeneration and self._indeterminate then
+				if self._indeterminate then
 					loop()
 				end
 			end)
@@ -2758,7 +2747,6 @@ end
 Modules["Components/Selection/ColorPicker"] = function(...)
 local UserInputService = game:GetService("UserInputService")
 local GuiService = game:GetService("GuiService")
-local Workspace = game:GetService("Workspace")
 
 local Import = ...
 local Create = Import("Core/Create")
@@ -3048,18 +3036,7 @@ end
 function ColorPicker:_positionPopup()
 	local pos = self._swatch.AbsolutePosition
 	local size = self._swatch.AbsoluteSize
-	local popupSize = self._popup.AbsoluteSize
-	local viewport = Workspace.CurrentCamera.ViewportSize
-
-	local x = math.clamp(pos.X + size.X - POPUP_WIDTH, 0, math.max(0, viewport.X - popupSize.X))
-
-	local y = pos.Y + size.Y + 4
-	if y + popupSize.Y > viewport.Y then
-		local upwardY = pos.Y - popupSize.Y - 4
-		y = upwardY >= 0 and upwardY or math.max(0, viewport.Y - popupSize.Y)
-	end
-
-	self._popup.Position = UDim2.new(0, x, 0, y)
+	self._popup.Position = UDim2.new(0, pos.X + size.X - POPUP_WIDTH, 0, pos.Y + size.Y + 4)
 end
 
 function ColorPicker:_isPointInside(guiObject, point)
@@ -3080,9 +3057,6 @@ function ColorPicker:Open()
 	self:_positionPopup()
 	self._popup.Visible = true
 	self._open = true
-	self._followConnection = self._swatch:GetPropertyChangedSignal("AbsolutePosition"):Connect(function()
-		self:_positionPopup()
-	end)
 
 	self._outsideClickConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		if gameProcessed then return end
@@ -3110,11 +3084,6 @@ function ColorPicker:Close()
         self._outsideClickConnection = nil
     end
 
-    if self._followConnection then
-        self._followConnection:Disconnect()
-        self._followConnection = nil
-    end
-
 	self._svDragging = false
     self._hueDragging = false
     if self._svMoveConn then self._svMoveConn:Disconnect() self._svMoveConn = nil end
@@ -3132,8 +3101,6 @@ function ColorPicker:Toggle()
 end
 
 function ColorPicker:SetValue(color)
-	if color == self:_currentColor() then return end
-
 	local h, s, v = color:ToHSV()
 	self._hue, self._sat, self._val = h, s, v
 	self:_updateCursorPositions()
@@ -3146,11 +3113,6 @@ end
 
 function ColorPicker:Destroy()
 	self:Close()
-
-	if self._followConnection then
-		self._followConnection:Disconnect()
-		self._followConnection = nil
-	end
 
 	if self._input then
 		self._input:Destroy()
@@ -3179,7 +3141,6 @@ end
 
 Modules["Components/Selection/Dropdown"] = function(...)
 local UserInputService = game:GetService("UserInputService")
-local Workspace = game:GetService("Workspace")
 
 local Import = ...
 local Create = Import("Core/Create")
@@ -3266,7 +3227,6 @@ function Dropdown.new(props)
 		TextSize = 13,
 		Font = Enum.Font.GothamMedium,
 		BorderSizePixel = 0,
-		ClipsDescendants = true,
 		Parent = container,
 	})
 	Draw.ApplyCorner(selectButton, POPUP_RADIUS)
@@ -3349,16 +3309,17 @@ end
 function Dropdown:_ensurePopup()
 	if self._popup then return end
 
-	local searchHeight = self._searchable and SEARCH_HEIGHT or 0
+	local listHeight = math.min(#self._options * OPTION_HEIGHT, POPUP_MAX_HEIGHT)
+	local popupHeight = listHeight + (self._searchable and SEARCH_HEIGHT or 0)
 
 	local popup = Create("Frame", {
 		Name = "NeroDropdownPopup",
-		Size = UDim2.new(0, SELECT_BUTTON_SIZE.X.Offset, 0, searchHeight),
+		Size = UDim2.new(0, SELECT_BUTTON_SIZE.X.Offset, 0, popupHeight),
 		BorderSizePixel = 0,
-		ClipsDescendants = true,
 		Visible = false,
 	})
 	Draw.ApplyCorner(popup, POPUP_RADIUS)
+	Draw.ApplyListLayout(popup, 0, "Vertical")
 
 	self:OnThemeChanged(function(theme)
 		popup.BackgroundColor3 = theme.Surface
@@ -3392,38 +3353,6 @@ function Dropdown:_ensurePopup()
 		self._searchBox = searchBox
 	end
 
-	local optionsList = Create("ScrollingFrame", {
-		Name = "OptionsList",
-		Position = UDim2.new(0, 0, 0, searchHeight),
-		Size = UDim2.new(1, 0, 0, 0),
-		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-		ScrollBarThickness = 4,
-		ScrollBarImageTransparency = 0.3,
-		CanvasSize = UDim2.new(0, 0, 0, 0),
-		Parent = popup,
-	})
-	self._optionsList = optionsList
-
-	self:OnThemeChanged(function(theme)
-		optionsList.ScrollBarImageColor3 = theme.Accent
-	end)
-
-	local listLayout = Draw.ListLayout(0, "Vertical")
-	listLayout.Parent = optionsList
-	self._listLayout = listLayout
-	local function updateListSize()
-		local contentHeight = listLayout.AbsoluteContentSize.Y
-		local clampedHeight = math.min(contentHeight, POPUP_MAX_HEIGHT)
-
-		optionsList.Size = UDim2.new(1, 0, 0, clampedHeight)
-		optionsList.CanvasSize = UDim2.new(0, 0, 0, contentHeight)
-		popup.Size = UDim2.new(0, SELECT_BUTTON_SIZE.X.Offset, 0, clampedHeight + searchHeight)
-	end
-	self._updateListSize = updateListSize
-
-	self._listLayoutConnection = listLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(updateListSize)
-
 	for index, optionText in self._options do
 		local optionButton = Create("TextButton", {
 			Name = "Option_" .. optionText,
@@ -3434,9 +3363,8 @@ function Dropdown:_ensurePopup()
 			TextSize = 13,
 			Font = Enum.Font.GothamMedium,
 			BackgroundTransparency = 1,
-			ClipsDescendants = true,
 			LayoutOrder = index,
-			Parent = optionsList,
+			Parent = popup,
 		})
 
 		local checkFrame = nil
@@ -3507,23 +3435,13 @@ function Dropdown:_ensurePopup()
 	end
 
 	self._popup = popup
-	updateListSize()
 end
 
 function Dropdown:_positionPopup()
 	local buttonPos = self._selectButton.AbsolutePosition
 	local buttonSize = self._selectButton.AbsoluteSize
-	local popupSize = self._popup.AbsoluteSize
-	local viewport = Workspace.CurrentCamera.ViewportSize
 
-	local x = math.clamp(buttonPos.X, 0, math.max(0, viewport.X - popupSize.X))
-	local y = buttonPos.Y + buttonSize.Y + 4
-	if y + popupSize.Y > viewport.Y then
-		local upwardY = buttonPos.Y - popupSize.Y - 4
-		y = upwardY >= 0 and upwardY or math.max(0, viewport.Y - popupSize.Y)
-	end
-
-	self._popup.Position = UDim2.new(0, x, 0, y)
+	self._popup.Position = UDim2.new(0, buttonPos.X, 0, buttonPos.Y + buttonSize.Y + 4)
 end
 
 function Dropdown:Open()
@@ -3541,10 +3459,6 @@ function Dropdown:Open()
 		self._searchBox.Text = ""
 		self:_filterOptions("")
 	end
-
-	self._followConnection = self._selectButton:GetPropertyChangedSignal("AbsolutePosition"):Connect(function()
-		self:_positionPopup()
-	end)
 
 	self._outsideClickConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		if gameProcessed then return end
@@ -3573,11 +3487,6 @@ function Dropdown:Close()
 	if self._outsideClickConnection then
 		self._outsideClickConnection:Disconnect()
 		self._outsideClickConnection = nil
-	end
-
-	if self._followConnection then
-		self._followConnection:Disconnect()
-		self._followConnection = nil
 	end
 end
 
@@ -3653,14 +3562,8 @@ function Dropdown:SetOptions(newOptions)
 	end
 
 	if self._popup then
-		if self._listLayoutConnection then
-			self._listLayoutConnection:Disconnect()
-			self._listLayoutConnection = nil
-		end
 		self._popup:Destroy()
 		self._popup = nil
-		self._optionsList = nil
-		self._listLayout = nil
 		table.clear(self._optionRows)
 		self._searchBox = nil
 	end
@@ -3704,16 +3607,6 @@ function Dropdown:Destroy()
 	if self._input then
 		self._input:Destroy()
 		self._input = nil
-	end
-
-	if self._listLayoutConnection then
-		self._listLayoutConnection:Disconnect()
-		self._listLayoutConnection = nil
-	end
-
-	if self._followConnection then
-		self._followConnection:Disconnect()
-		self._followConnection = nil
 	end
 
 	if self._popup then
@@ -5814,9 +5707,7 @@ function WidgetDrag:_snap()
 	local viewport = getViewportSize()
 	local instance = self._instance
 	local currentX = instance.AbsolutePosition.X
-	local currentY = instance.AbsolutePosition.Y
 	local width = instance.AbsoluteSize.X
-	local height = instance.AbsoluteSize.Y
 
 	local centerX = currentX + (width / 2)
 	local targetX
@@ -5827,14 +5718,11 @@ function WidgetDrag:_snap()
 		targetX = viewport.X - width - SNAP_MARGIN
 	end
 
-	local maxY = math.max(SNAP_MARGIN, viewport.Y - height - SNAP_MARGIN)
-	local targetY = math.clamp(currentY, SNAP_MARGIN, maxY)
-
 	if self._snapTween then
 		self._snapTween:Cancel()
 	end
 	self._snapTween = Tween.Quick(instance, {
-		Position = UDim2.new(0, targetX, 0, targetY),
+		Position = UDim2.new(0, targetX, 0, instance.Position.Y.Offset),
 	}, SNAP_TWEEN_DURATION)
 end
 

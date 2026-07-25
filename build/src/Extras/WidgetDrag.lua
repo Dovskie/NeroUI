@@ -95,9 +95,7 @@ function WidgetDrag:_snap()
 	local viewport = getViewportSize()
 	local instance = self._instance
 	local currentX = instance.AbsolutePosition.X
-	local currentY = instance.AbsolutePosition.Y
 	local width = instance.AbsoluteSize.X
-	local height = instance.AbsoluteSize.Y
 
 	local centerX = currentX + (width / 2)
 	local targetX
@@ -108,14 +106,11 @@ function WidgetDrag:_snap()
 		targetX = viewport.X - width - SNAP_MARGIN
 	end
 
-	local maxY = math.max(SNAP_MARGIN, viewport.Y - height - SNAP_MARGIN)
-	local targetY = math.clamp(currentY, SNAP_MARGIN, maxY)
-
 	if self._snapTween then
 		self._snapTween:Cancel()
 	end
 	self._snapTween = Tween.Quick(instance, {
-		Position = UDim2.new(0, targetX, 0, targetY),
+		Position = UDim2.new(0, targetX, 0, instance.Position.Y.Offset),
 	}, SNAP_TWEEN_DURATION)
 end
 

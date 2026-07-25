@@ -94,7 +94,6 @@ function DataTable:_buildHeader()
             BackgroundTransparency = 1,
             AutoButtonColor = false,
             Text = '',
-            ClipsDescendants = true,
             Parent = header,
         })
         xOffset += col._resolvedWidth
@@ -176,7 +175,6 @@ function DataTable:_render()
                 TextXAlignment = col.Align or Enum.TextXAlignment.Left,
                 TextSize = 13,
                 Font = Enum.Font.GothamMedium,
-                ClipsDescendants = true,
                 Parent = rowFrame,
             })
             xOffset += col._resolvedWidth
@@ -207,10 +205,6 @@ function DataTable:Sort(key, ascending)
 
     table.sort(self._data, function(a, b)
         local av, bv = a[key], b[key]
-        if av == nil and bv == nil then return false end
-        if av == nil then return false end
-        if bv == nil then return true end
-
         if av == bv then return false end
         if ascending then return av < bv end
         return av > bv
