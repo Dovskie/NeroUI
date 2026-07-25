@@ -196,6 +196,26 @@ function ColorPicker:_ensurePopup()
 
 	self:_updateCursorPositions()
 	self:_setupDragging(svSquare, hueSlider)
+
+	-- Cari ScrollingFrame leluhur sekali di sini (bukan tiap Open) karena
+	-- posisi komponen ini di hierarchy nggak berubah-ubah. Kalau ketemu,
+	-- bikin "clip host": Frame transparan dengan ClipsDescendants = true
+	-- yang nanti disamain ukurannya persis sama area visible ScrollingFrame
+	-- itu. Popup di-parent ke situ, bukan langsung ke root, supaya popup
+	-- otomatis kepotong rapi ngikutin batas scroll -- sama kayak konten lain
+	-- yang di-scroll -- bukan meluber keluar panel.
+	self._scrollFrame = self._swatch:FindFirstAncestorWhichIsA("ScrollingFrame")
+
+	if self._scrollFrame then
+		local clipHost = Create("Frame", {
+			Name = "NeroColorPickerClipHost",
+			BackgroundTransparency = 1,
+			BorderSizePixel = 0,
+			ClipsDescendants = true,
+		})
+		popup.Parent = clipHost
+		self._clipHost = clipHost
+	end
 end
 
 function ColorPicker:_updateCursorPositions()
@@ -289,7 +309,21 @@ end
 function ColorPicker:_positionPopup()
 	local pos = self._swatch.AbsolutePosition
 	local size = self._swatch.AbsoluteSize
-	self._popup.Position = UDim2.new(0, pos.X + size.X - POPUP_WIDTH, 0, pos.Y + size.Y + 4)
+
+	if self._clipHost and self._scrollFrame then
+		local sfPos = self._scrollFrame.AbsolutePosition
+		local sfSize = self._scrollFrame.AbsoluteSize
+
+		-- clip host disamain persis dengan area visible ScrollingFrame
+		self._clipHost.Position = UDim2.new(0, sfPos.X, 0, sfPos.Y)
+		self._clipHost.Size = UDim2.new(0, sfSize.X, 0, sfSize.Y)
+
+		-- popup posisinya relatif terhadap clip host (bukan layar), jadi
+		-- dikurangi posisi clip host-nya
+		self._popup.Position = UDim2.new(0, pos.X + size.X - POPUP_WIDTH - sfPos.X, 0, pos.Y - sfPos.Y + size.Y + 4)
+	else
+		self._popup.Position = UDim2.new(0, pos.X + size.X - POPUP_WIDTH, 0, pos.Y + size.Y + 4)
+	end
 end
 
 function ColorPicker:_isPointInside(guiObject, point)
@@ -305,23 +339,22 @@ function ColorPicker:Open()
 	end
 
 	self:_ensurePopup()
-	self._popup.Parent = ScreenManager.GetRoot()
-	ScreenManager.BringToFront(self._popup)
+	local hostFrame = self._clipHost or self._popup
+	hostFrame.Parent = ScreenManager.GetRoot()
+	ScreenManager.BringToFront(hostFrame)
 	self:_positionPopup()
 	self._popup.Visible = true
 	self._open = true
 
-	-- FIX: popup di-parent ke root terpisah (ScreenManager root), jadi dia
-	-- tidak otomatis ikut ketika container ini di-scroll di dalam sebuah
-	-- ScrollingFrame. AbsolutePosition swatch tetap ter-update oleh Roblox
-	-- saat CanvasPosition berubah, jadi kita dengerin itu dan reposisi popup
-	-- setiap kali berubah supaya popup selalu "menempel" ke swatch-nya.
-	-- Kalau swatch-nya sampai ter-scroll keluar dari viewport ScrollingFrame
-	-- induknya (naik ke atas hierarchy, jadi tetap aman walau nested di
-	-- dalam Section dsb.), popup ditutup otomatis biar ga "ngambang".
-	local scrollFrame = self._swatch:FindFirstAncestorWhichIsA("ScrollingFrame")
-	self._scrollFrame = scrollFrame
-
+	-- FIX: popup (via clip host) di-parent ke root terpisah (ScreenManager
+	-- root), jadi dia tidak otomatis ikut ketika container ini di-scroll di
+	-- dalam sebuah ScrollingFrame. AbsolutePosition swatch tetap ter-update
+	-- oleh Roblox saat CanvasPosition berubah, jadi kita dengerin itu dan
+	-- reposisi popup + clip host setiap kali berubah supaya popup selalu
+	-- "menempel" ke swatch-nya dan kepotong rapi ngikutin batas scroll.
+	-- Baru bener-bener Close() kalau swatch-nya udah keluar TOTAL dari area
+	-- scroll (nggak ada overlap sama sekali) -- overflow visualnya sendiri
+	-- udah ditangani oleh clip host di atas.
 	local function trackPosition()
 		if not self._open or not self._popup then return end
 
@@ -333,8 +366,8 @@ function ColorPicker:Open()
 			local swPos = self._swatch.AbsolutePosition
 			local swSize = self._swatch.AbsoluteSize
 
-			local stillVisible = swPos.Y + swSize.Y > sfPos.Y and swPos.Y < sfPos.Y + sfSize.Y
-			if not stillVisible then
+			local completelyGone = (swPos.Y + swSize.Y <= sfPos.Y) or (swPos.Y >= sfPos.Y + sfSize.Y)
+			if completelyGone then
 				self:Close()
 			end
 		end
@@ -369,11 +402,12 @@ function ColorPicker:Close()
     end
 
     -- FIX: hentikan tracking posisi saat popup ditutup
+    -- (catatan: self._scrollFrame TIDAK direset di sini -- dia dihitung
+    -- sekali di _ensurePopup dan tetap sama selama komponen ini hidup)
     if self._positionConnection then
         self._positionConnection:Disconnect()
         self._positionConnection = nil
     end
-    self._scrollFrame = nil
 
 	self._svDragging = false
     self._hueDragging = false
@@ -420,6 +454,10 @@ function ColorPicker:Destroy()
 	if self._popup then
 		self._popup:Destroy()
 		self._popup = nil
+	end
+	if self._clipHost then
+		self._clipHost:Destroy()
+		self._clipHost = nil
 	end
 
 	self.OnValueChanged:Destroy()
