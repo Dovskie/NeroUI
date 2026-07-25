@@ -127,7 +127,10 @@ function ProgressBar:GetValue()
 end
 
 function ProgressBar:SetIndeterminate(isIndeterminate)
+	if self._indeterminate == isIndeterminate then return end
 	self._indeterminate = isIndeterminate
+	self._indeterminateGeneration = (self._indeterminateGeneration or 0) + 1
+	local myGeneration = self._indeterminateGeneration
 
 	if self._indeterminateTween then
 		self._indeterminateTween:Cancel()
@@ -142,10 +145,12 @@ function ProgressBar:SetIndeterminate(isIndeterminate)
 		self._fill.Size = UDim2.new(0.3, 0, 1, 0)
 
 		local function loop()
+			if myGeneration ~= self._indeterminateGeneration then return end
+
 			self._fill.Position = UDim2.new(0, 0, 0, 0)
 			self._indeterminateTween = Tween.new(self._fill, { Position = UDim2.new(0.7, 0, 0, 0) }, INDETERMINATE_DURATION, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
 			self._indeterminateTween.Completed:Connect(function()
-				if self._indeterminate then
+				if myGeneration == self._indeterminateGeneration and self._indeterminate then
 					loop()
 				end
 			end)

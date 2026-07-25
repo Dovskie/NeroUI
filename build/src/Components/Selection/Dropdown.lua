@@ -85,6 +85,7 @@ function Dropdown.new(props)
 		TextSize = 13,
 		Font = Enum.Font.GothamMedium,
 		BorderSizePixel = 0,
+		ClipsDescendants = true,
 		Parent = container,
 	})
 	Draw.ApplyCorner(selectButton, POPUP_RADIUS)
@@ -167,17 +168,16 @@ end
 function Dropdown:_ensurePopup()
 	if self._popup then return end
 
-	local listHeight = math.min(#self._options * OPTION_HEIGHT, POPUP_MAX_HEIGHT)
-	local popupHeight = listHeight + (self._searchable and SEARCH_HEIGHT or 0)
+	local searchHeight = self._searchable and SEARCH_HEIGHT or 0
 
 	local popup = Create("Frame", {
 		Name = "NeroDropdownPopup",
-		Size = UDim2.new(0, SELECT_BUTTON_SIZE.X.Offset, 0, popupHeight),
+		Size = UDim2.new(0, SELECT_BUTTON_SIZE.X.Offset, 0, searchHeight),
 		BorderSizePixel = 0,
+		ClipsDescendants = true,
 		Visible = false,
 	})
 	Draw.ApplyCorner(popup, POPUP_RADIUS)
-	Draw.ApplyListLayout(popup, 0, "Vertical")
 
 	self:OnThemeChanged(function(theme)
 		popup.BackgroundColor3 = theme.Surface
@@ -211,6 +211,38 @@ function Dropdown:_ensurePopup()
 		self._searchBox = searchBox
 	end
 
+	local optionsList = Create("ScrollingFrame", {
+		Name = "OptionsList",
+		Position = UDim2.new(0, 0, 0, searchHeight),
+		Size = UDim2.new(1, 0, 0, 0),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ScrollBarThickness = 4,
+		ScrollBarImageTransparency = 0.3,
+		CanvasSize = UDim2.new(0, 0, 0, 0),
+		Parent = popup,
+	})
+	self._optionsList = optionsList
+
+	self:OnThemeChanged(function(theme)
+		optionsList.ScrollBarImageColor3 = theme.Accent
+	end)
+
+	local listLayout = Draw.ListLayout(0, "Vertical")
+	listLayout.Parent = optionsList
+	self._listLayout = listLayout
+	local function updateListSize()
+		local contentHeight = listLayout.AbsoluteContentSize.Y
+		local clampedHeight = math.min(contentHeight, POPUP_MAX_HEIGHT)
+
+		optionsList.Size = UDim2.new(1, 0, 0, clampedHeight)
+		optionsList.CanvasSize = UDim2.new(0, 0, 0, contentHeight)
+		popup.Size = UDim2.new(0, SELECT_BUTTON_SIZE.X.Offset, 0, clampedHeight + searchHeight)
+	end
+	self._updateListSize = updateListSize
+
+	self._listLayoutConnection = listLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(updateListSize)
+
 	for index, optionText in self._options do
 		local optionButton = Create("TextButton", {
 			Name = "Option_" .. optionText,
@@ -221,8 +253,9 @@ function Dropdown:_ensurePopup()
 			TextSize = 13,
 			Font = Enum.Font.GothamMedium,
 			BackgroundTransparency = 1,
+			ClipsDescendants = true,
 			LayoutOrder = index,
-			Parent = popup,
+			Parent = optionsList,
 		})
 
 		local checkFrame = nil
@@ -293,6 +326,7 @@ function Dropdown:_ensurePopup()
 	end
 
 	self._popup = popup
+	updateListSize()
 end
 
 function Dropdown:_positionPopup()
@@ -420,8 +454,14 @@ function Dropdown:SetOptions(newOptions)
 	end
 
 	if self._popup then
+		if self._listLayoutConnection then
+			self._listLayoutConnection:Disconnect()
+			self._listLayoutConnection = nil
+		end
 		self._popup:Destroy()
 		self._popup = nil
+		self._optionsList = nil
+		self._listLayout = nil
 		table.clear(self._optionRows)
 		self._searchBox = nil
 	end
@@ -465,6 +505,11 @@ function Dropdown:Destroy()
 	if self._input then
 		self._input:Destroy()
 		self._input = nil
+	end
+
+	if self._listLayoutConnection then
+		self._listLayoutConnection:Disconnect()
+		self._listLayoutConnection = nil
 	end
 
 	if self._popup then

@@ -354,6 +354,8 @@ function ColorPicker:Toggle()
 end
 
 function ColorPicker:SetValue(color)
+	if color == self:_currentColor() then return end
+
 	local h, s, v = color:ToHSV()
 	self._hue, self._sat, self._val = h, s, v
 	self:_updateCursorPositions()
