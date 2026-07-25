@@ -101,7 +101,7 @@ NeroUI.KeybindManager.Bind("ToggleAim", aimKeybind, {
 	end,
 })
 
-aimSection:AddSeparator()
+aimSection:AddSeparator({ DependsOn = { Component = aimToggle } })
 
 local targetDropdown = aimSection:AddDropdown({
 	Text = "Target Priority",
@@ -124,7 +124,7 @@ local targetDropdown2 = aimSection:AddDropdown({
 	end,
 })
 
-aimSection:AddSeparator()
+aimSection:AddSeparator({ DependsOn = { Component = aimToggle } })
 
 -- Dropdown Searchable: berguna kalau opsinya banyak, contoh daftar player di server
 local playerDropdown = aimSection:AddDropdown({
@@ -149,7 +149,7 @@ local function refreshPlayerList()
 end
 -- refreshPlayerList() -- panggil ini tiap ada PlayerAdded/PlayerRemoving
 
-aimSection:AddSeparator()
+aimSection:AddSeparator({ DependsOn = { Component = aimToggle } })
 
 -- Input (TextBox): buat teks bebas, contoh nama target spesifik
 local targetNameInput = aimSection:AddInput({
